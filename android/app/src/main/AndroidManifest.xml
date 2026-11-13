@@ -49,7 +49,8 @@
         </provider>
     </application>
 
-    <!-- Permissions -->
-
+    <!-- Permissions: INTERNET only because Android WebView needs it to load the app's local
+         pages. The app itself makes no network requests (enforced by a Content-Security-Policy).
+         Files are accessed through the system document picker: no storage permission needed. -->
     <uses-permission android:name="android.permission.INTERNET" />
 </manifest>

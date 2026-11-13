@@ -8,10 +8,14 @@ License: **GNU GPL v3** (see [LICENSE](LICENSE)). Third-party components: [THIRD
 
 > Download: ready-built APKs are in [`releases/`](releases/). See [Install](#install) below.
 
-<!-- Screenshots: replace the placeholders below with real device captures -->
-| Phone | Tablet | Dark mode |
+<!-- Screenshots are captured from the web build at phone/tablet sizes; replace with on-device captures when available -->
+| Phone | Phone — Format tools | Dark mode |
 |---|---|---|
-| ![phone screenshot placeholder](docs/screenshots/phone.png) | ![tablet screenshot placeholder](docs/screenshots/tablet.png) | ![dark mode placeholder](docs/screenshots/dark.png) |
+| ![Phone](docs/screenshots/phone.png) | ![Format tools](docs/screenshots/phone-format.png) | ![Dark mode](docs/screenshots/dark.png) |
+
+| Tablet with side panel | Charts |
+|---|---|
+| ![Tablet](docs/screenshots/tablet.png) | ![Charts](docs/screenshots/tablet-chart.png) |
 
 ---
 
@@ -44,9 +48,9 @@ License: **GNU GPL v3** (see [LICENSE](LICENSE)). Third-party components: [THIRD
 
   | Tier | RAM | Load chunk | Workers | Effects | Warn above 100k rows |
   |---|---|---|---|---|---|
-  | Low | ≤ 3 GB | 1,000 rows | 1 | reduced motion | yes |
-  | Mid | 4–6 GB | 4,000 rows | 2 | normal | yes |
-  | High | 8 GB+ | 10,000 rows | up to 4 | smooth, 90/120 Hz requested | no |
+  | Low | ≤ 3 GB | 1,000 rows | 1 | reduced motion, grid canvas ≤ 1.5x | yes |
+  | Mid | 4–6 GB | 4,000 rows | 2 | normal, grid canvas ≤ 2x | yes |
+  | High | 8 GB+ | 10,000 rows | up to 4 | smooth, native resolution, 90/120 Hz requested | no |
 
   Phones report slightly less RAM than advertised (an 8 GB phone shows about 7.4 GB), so the value is
   rounded up to the nearest standard size. Devices with 4 or fewer cores drop one tier.
@@ -54,6 +58,7 @@ License: **GNU GPL v3** (see [LICENSE](LICENSE)). Third-party components: [THIRD
 * **Everything heavy runs in Web Workers:** formulas (HyperFormula), file parsing and writing
   (ExcelJS / SheetJS), transforms and pivots (Arquero, worker pool sized by tier) and macros (one throw-away worker per run).
 * **Virtualised canvas grid** (Univer): only visible cells are drawn. Render data for hidden sheets is released.
+* **Incremental autosave:** cells are stored in 2,000-row chunks and only changed chunks are rewritten.
 * **Incremental recalculation:** only cells depending on an edit are recomputed (HyperFormula dependency graph).
 * **Chunked loading** with a progress bar; files are transferred to workers without copying (Transferables).
 * Debounced input (formula suggestions, chart redraws). Release build is minified and code-split.

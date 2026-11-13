@@ -14,7 +14,7 @@ import type { IoWorkerApi } from '../io/io.worker';
 import type { AppMeta, CfEntry, LoadChunk, LoadResult, ParsedMeta } from '../io/types';
 import { cfFromUniver, cfToUniver, type UCfRule } from '../univer/cf';
 import { getTier } from '../device/tier';
-import { kv } from './storage';
+import { AutosaveTracker, loadSession } from './autosave';
 import { MIME, saveFile, type OpenedFile } from '../io/files';
 
 export type FileFormat = 'xlsx' | 'xlsm' | 'csv' | 'xls' | 'ods';
@@ -57,6 +57,8 @@ class Doc {
   private listeners = new Set<Listener>();
   private autosaveTimer?: ReturnType<typeof setTimeout>;
   private loading = false;
+  private saver = new AutosaveTracker();
+  private saving: Promise<void> | null = null;
 
   get api() {
     return this.h.api;
@@ -92,7 +94,14 @@ class Doc {
       if (this.loading) return;
       const opt = options as { fromFormulaEngine?: boolean; onlyLocal?: boolean } | undefined;
       // only real workbook changes count (editor-internal doc mutations and auto row heights do not)
-      if (info.type === 2 /* MUTATION */ && !opt?.fromFormulaEngine && /^sheet\.mutation\./.test(info.id) && !/auto-height/.test(info.id)) this.markDirty();
+      if (info.type === 2 /* MUTATION */ && /^sheet\.mutation\./.test(info.id) && !/auto-height/.test(info.id)) {
+        const p = info.params as { subUnitId?: string; cellValue?: Record<string, unknown> } | undefined;
+        // computed formula results are written too, so the saved session shows them on restore
+        if (info.id === 'sheet.mutation.set-range-values' && p?.subUnitId && p.cellValue) this.saver.markCells(p.subUnitId, Object.keys(p.cellValue).map(Number));
+        else if (p?.subUnitId) this.saver.markSheet(p.subUnitId);
+        if (!opt?.fromFormulaEngine) this.markDirty();
+        else this.scheduleAutosave();
+      }
       if (/sheet|worksheet/.test(info.id)) this.refreshSheets();
     });
   }
@@ -135,8 +144,16 @@ class Doc {
 
   private markDirty() {
     if (!this.snap.dirty) this.emit({ dirty: true });
+    this.scheduleAutosave();
+  }
+  private scheduleAutosave() {
     clearTimeout(this.autosaveTimer);
     this.autosaveTimer = setTimeout(() => this.autosave(), getTier().autosaveMs);
+  }
+  /** After a whole workbook was (re)loaded: everything must be written once. */
+  private markAllForSave() {
+    this.saver.markAll(this.wb.getSheets().map((s) => s.getSheetId()));
+    this.scheduleAutosave();
   }
 
   private disposeCurrent() {
@@ -157,6 +174,7 @@ class Doc {
     this.loading = false;
     this.emit({ file: { name, format: 'xlsx', vba: null }, dirty: false, savedAt: null });
     this.refreshSheets();
+    this.markAllForSave();
   }
 
   /** Open a picked file: parse in the IO worker, stream rows in chunks, then build the grid. */
@@ -201,6 +219,7 @@ class Doc {
       savedAt: null,
     });
     this.refreshSheets();
+    this.markAllForSave();
     console.info(`[open] ${file.name}: ${rows} rows in ${Math.round(performance.now() - t0)} ms`);
     return true;
   }
@@ -300,32 +319,33 @@ class Doc {
 
   async autosave() {
     clearTimeout(this.autosaveTimer);
-    try {
-      const f = this.snap.file;
-      await kv.set('session', {
-        data: this.wb.save(),
-        meta: this.meta,
-        cf: this.collectCf(),
-        file: { name: f.name, format: f.format, uri: f.uri, vba: f.vba },
-        dirty: this.snap.dirty,
-        time: Date.now(),
-      });
-    } catch (e) {
-      console.warn('autosave failed', e);
-    }
+    if (this.saving) return this.saving; // one save at a time
+    const f = this.snap.file;
+    const extra = {
+      meta: this.meta,
+      cf: this.collectCf(),
+      file: { name: f.name, format: f.format, uri: f.uri, vba: f.vba },
+      dirty: this.snap.dirty,
+    };
+    this.saving = this.saver
+      .save(this.wb.getWorkbook(), extra)
+      .catch((e) => console.warn('autosave failed', e))
+      .finally(() => (this.saving = null));
+    return this.saving;
   }
 
   async restoreSession(): Promise<boolean> {
-    const s = await kv.get<{ data: IWorkbookData; meta: AppMeta; cf: CfEntry[]; file: FileInfo; dirty: boolean; time: number }>('session');
-    if (!s?.data) return false;
+    const s = await loadSession();
+    if (!s) return false;
+    const extra = s.extra as { meta: AppMeta; cf: CfEntry[]; file: FileInfo; dirty: boolean };
     this.loading = true;
     this.disposeCurrent();
     const fwb = this.h.api.createWorkbook(s.data);
-    this.meta = { ...emptyMeta(), ...s.meta };
-    this.applyCf(s.cf ?? []);
+    this.meta = { ...emptyMeta(), ...extra.meta };
+    this.applyCf(extra.cf ?? []);
     await this.bridge.attach(fwb);
     this.loading = false;
-    this.emit({ file: s.file, dirty: s.dirty, savedAt: s.time });
+    this.emit({ file: extra.file, dirty: extra.dirty, savedAt: s.time });
     this.refreshSheets();
     return true;
   }

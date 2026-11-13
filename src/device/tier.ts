@@ -28,6 +28,8 @@ export interface TierConfig {
   warnRows: number | null;
   previewRows: number;
   undoLimit: number;
+  /** maximum canvas pixel ratio for the grid (fewer pixels per frame on weaker GPUs) */
+  maxPixelRatio: number;
 }
 
 const CAPACITIES = [1, 1.5, 2, 3, 4, 6, 8, 12, 16, 18, 24, 32];
@@ -47,9 +49,9 @@ export function configFor(tier: Tier, base: { ramGb: number; cores: number; soc:
   const common = { ...base, tier };
   switch (tier) {
     case 'low':
-      return { ...common, chunkRows: 1000, maxWorkers: 1, animations: 'reduced', autosaveMs: 20000, macroTimeoutMs: 3000, warnRows: 100_000, previewRows: 50, undoLimit: 30 };
+      return { ...common, chunkRows: 1000, maxWorkers: 1, animations: 'reduced', autosaveMs: 20000, macroTimeoutMs: 3000, warnRows: 100_000, previewRows: 50, undoLimit: 30, maxPixelRatio: 1.5 };
     case 'mid':
-      return { ...common, chunkRows: 4000, maxWorkers: 2, animations: 'normal', autosaveMs: 10000, macroTimeoutMs: 5000, warnRows: 100_000, previewRows: 100, undoLimit: 100 };
+      return { ...common, chunkRows: 4000, maxWorkers: 2, animations: 'normal', autosaveMs: 10000, macroTimeoutMs: 5000, warnRows: 100_000, previewRows: 100, undoLimit: 100, maxPixelRatio: 2 };
     case 'high':
       return {
         ...common,
@@ -61,6 +63,7 @@ export function configFor(tier: Tier, base: { ramGb: number; cores: number; soc:
         warnRows: null,
         previewRows: 200,
         undoLimit: 300,
+        maxPixelRatio: 4,
       };
   }
 }
@@ -97,7 +100,23 @@ export async function detectTier(): Promise<TierConfig> {
     }
   }
   current = configFor(tier, { ramGb, cores, soc, refreshRate });
+  capPixelRatio(current.maxPixelRatio);
   document.documentElement.dataset.tier = tier;
   document.documentElement.dataset.motion = current.animations;
   return current;
+}
+
+/**
+ * The grid canvas renders at window.devicePixelRatio. On Low/Mid tiers we cap it
+ * (e.g. 2.75x -> 2x or 1.5x): roughly 2-3x fewer pixels to draw per frame, with
+ * slightly softer cell text. DOM UI (toolbars, dialogs) is unaffected.
+ */
+export function capPixelRatio(max: number) {
+  const real = window.devicePixelRatio || 1;
+  if (real <= max) return;
+  try {
+    Object.defineProperty(window, 'devicePixelRatio', { configurable: true, get: () => max });
+  } catch {
+    /* ignore */
+  }
 }

@@ -177,13 +177,8 @@ export class FormulaBridge {
       }
       this.scheduleFlush();
     } else if (STRUCTURAL.has(id)) {
-      const ids = new Set<string>();
-      for (const k of ['subUnitId']) if (typeof params[k] === 'string') ids.add(params[k] as string);
-      for (const k of ['from', 'to']) {
-        const v = params[k] as { subUnitId?: string } | undefined;
-        if (v?.subUnitId) ids.add(v.subUnitId);
-      }
-      ids.forEach((s) => this.scheduleResync(s));
+      this.flushNow(); // keep worker operations in the same order as grid mutations
+      this.structural(id, params);
     } else if (id === InsertSheetMutation.id) {
       const sheet = (params as { sheet: { id: string } }).sheet;
       const ws = this.workbook?.getSheetBySheetId(sheet.id);
@@ -198,6 +193,65 @@ export class FormulaBridge {
     } else if (id === SetWorksheetNameMutation.id) {
       const { subUnitId, name } = params as { subUnitId: string; name: string };
       this.enqueue(() => this.rpc.call('renameSheet', subUnitId, name));
+    }
+  }
+
+  /**
+   * Mirror row/column inserts, deletes and moves with HyperFormula's own operations
+   * (it shifts references, like the grid does); sorts and range moves only resend the
+   * affected block. Nothing here re-reads a whole sheet.
+   */
+  private structural(id: string, p: Record<string, unknown>) {
+    const sid = p.subUnitId as string;
+    const range = p.range as { startRow: number; endRow: number; startColumn: number; endColumn: number } | undefined;
+    const run = (fn: () => Promise<SheetChanges[]>) => this.enqueue(async () => this.apply(await fn()));
+    switch (id) {
+      case InsertRowMutation.id:
+        return run(() => this.rpc.call('insertRows', sid, range!.startRow, range!.endRow - range!.startRow + 1));
+      case RemoveRowMutation.id:
+        return run(() => this.rpc.call('removeRows', sid, range!.startRow, range!.endRow - range!.startRow + 1));
+      case InsertColMutation.id:
+        return run(() => this.rpc.call('insertCols', sid, range!.startColumn, range!.endColumn - range!.startColumn + 1));
+      case RemoveColMutation.id:
+        return run(() => this.rpc.call('removeCols', sid, range!.startColumn, range!.endColumn - range!.startColumn + 1));
+      case MoveRowsMutation.id: {
+        const { sourceRange: a, targetRange: t } = p as unknown as { sourceRange: typeof range; targetRange: typeof range };
+        return run(() => this.rpc.call('moveRows', sid, a!.startRow, a!.endRow - a!.startRow + 1, t!.startRow));
+      }
+      case MoveColsMutation.id: {
+        const { sourceRange: a, targetRange: t } = p as unknown as { sourceRange: typeof range; targetRange: typeof range };
+        return run(() => this.rpc.call('moveCols', sid, a!.startColumn, a!.endColumn - a!.startColumn + 1, t!.startColumn));
+      }
+      case ReorderRangeMutation.id:
+        return this.resendBlock(sid, range!);
+      case MoveRangeMutation.id: {
+        const mp = p as unknown as { fromRange?: typeof range; toRange?: typeof range; from: { subUnitId: string }; to: { subUnitId: string } };
+        if (mp.fromRange) this.resendBlock(mp.from.subUnitId, mp.fromRange);
+        if (mp.toRange) this.resendBlock(mp.to.subUnitId, mp.toRange);
+        if (!mp.fromRange || !mp.toRange) [mp.from.subUnitId, mp.to.subUnitId].forEach((x) => this.scheduleResync(x));
+        return;
+      }
+    }
+  }
+
+  private resendBlock(sheetId: string, r: { startRow: number; endRow: number; startColumn: number; endColumn: number }) {
+    const ws = this.workbook?.getSheetBySheetId(sheetId);
+    if (!ws) return;
+    const rows: Raw[][] = [];
+    for (let row = r.startRow; row <= r.endRow; row++) {
+      const out: Raw[] = [];
+      for (let c = r.startColumn; c <= r.endColumn; c++) out.push(this.cellToRaw(ws, ws.getCellRaw(row, c), row, c));
+      rows.push(out);
+    }
+    this.enqueue(async () => this.apply(await this.rpc.call('setBlock', sheetId, r.startRow, r.startColumn, rows as never)));
+  }
+
+  private flushNow() {
+    const batches = [...this.pending];
+    this.pending.clear();
+    for (const [sheetId, map] of batches) {
+      const cells = [...map.values()];
+      if (cells.length) this.enqueue(async () => this.apply(await this.rpc.call('setCells', sheetId, cells as never)));
     }
   }
 

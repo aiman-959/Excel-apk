@@ -301,10 +301,10 @@ await step('8b runaway macro is stopped by the timeout', async () => {
   await page.fill('[data-testid=macro-code]', 'while (true) {}');
   await page.click('[data-testid=macro-run]');
   await page.waitForFunction(() => document.querySelector('[data-testid=macro-output]')?.textContent?.includes('time limit'), null, { timeout: 15000 });
-  await page.fill('[data-testid=macro-code]', 'log(typeof fetch, typeof XMLHttpRequest, typeof importScripts)');
+  await page.fill('[data-testid=macro-code]', 'log(typeof fetch, typeof XMLHttpRequest, typeof importScripts, typeof eval, typeof Function, String((() => 0).constructor), typeof Object.getPrototypeOf(self).fetch)');
   await page.click('[data-testid=macro-run]');
   await page.waitForFunction(() => document.querySelector('[data-testid=macro-output]')?.textContent?.includes('Done'));
-  assert.match(await page.textContent('[data-testid=macro-output]'), /undefined undefined undefined/);
+  assert.match(await page.textContent('[data-testid=macro-output]'), /undefined undefined undefined undefined undefined undefined undefined/);
   await page.keyboard.press('Escape');
 });
 

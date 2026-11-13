@@ -32,6 +32,7 @@ export const kv = {
   get: <T>(key: string) => tx<T | undefined>('readonly', (s) => s.get(key) as IDBRequest<T | undefined>),
   set: (key: string, value: unknown) => tx('readwrite', (s) => s.put(value, key)),
   del: (key: string) => tx('readwrite', (s) => s.delete(key)),
+  delPrefix: (prefix: string) => tx('readwrite', (s) => s.delete(IDBKeyRange.bound(prefix, prefix + '\uffff'))),
 };
 
 /** Small synchronous preferences (theme, last panel) — localStorage with try/catch. */

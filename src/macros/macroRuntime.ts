@@ -25,6 +25,8 @@ export interface MacroResult {
 }
 
 const MAX_OPS = 2_000_000;
+// captured before the sandbox removes the global Function constructor
+const Fn = Function;
 
 export async function runMacro(input: MacroInput): Promise<MacroResult> {
   const sheets = new Map(input.sheets.map((s) => [s.name.toLowerCase(), { ...s, values: s.values.map((r) => [...r]) }]));
@@ -93,7 +95,7 @@ export async function runMacro(input: MacroInput): Promise<MacroResult> {
   };
 
   try {
-    const fn = new Function(...Object.keys(api), 'console', `"use strict";\nreturn (async () => {\n${input.code}\n})();`);
+    const fn = new Fn(...Object.keys(api), 'console', `"use strict";\nreturn (async () => {\n${input.code}\n})();`);
     await fn(...Object.values(api), { log: api.log, info: api.log, warn: api.log, error: api.log });
     return { ops, logs };
   } catch (e) {
