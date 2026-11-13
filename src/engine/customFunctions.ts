@@ -3,6 +3,7 @@
  * expect: AVERAGEIFS and CONCAT. Registered once per worker.
  */
 import SSF from 'ssf';
+import { registerExcelCompat } from './excelFunctions';
 import { FunctionArgumentType, FunctionPlugin, HyperFormula, SimpleRangeValue, CellError, ErrorType } from 'hyperformula';
 // AST / interpreter state are internal HyperFormula types; treat them opaquely.
 type ProcedureAst = { args: unknown[] } & Record<string, unknown>;
@@ -128,6 +129,7 @@ let registered = false;
 export function registerCustomFunctions() {
   if (registered) return;
   registered = true;
+  registerExcelCompat();
   HyperFormula.registerFunctionPlugin(ExtraFunctionsPlugin, {
     enGB: { AVERAGEIFS: 'AVERAGEIFS', CONCAT: 'CONCAT', TEXT: 'TEXT' },
     enUS: { AVERAGEIFS: 'AVERAGEIFS', CONCAT: 'CONCAT', TEXT: 'TEXT' },
