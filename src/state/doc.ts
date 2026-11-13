@@ -91,7 +91,8 @@ class Doc {
     cmd.onCommandExecuted((info, options) => {
       if (this.loading) return;
       const opt = options as { fromFormulaEngine?: boolean; onlyLocal?: boolean } | undefined;
-      if (info.type === 2 /* MUTATION */ && !opt?.fromFormulaEngine) this.markDirty();
+      // only real workbook changes count (editor-internal doc mutations and auto row heights do not)
+      if (info.type === 2 /* MUTATION */ && !opt?.fromFormulaEngine && /^sheet\.mutation\./.test(info.id) && !/auto-height/.test(info.id)) this.markDirty();
       if (/sheet|worksheet/.test(info.id)) this.refreshSheets();
     });
   }

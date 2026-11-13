@@ -53,6 +53,7 @@ export function useSelection(): SelInfo {
     const update = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
+        if (!doc.api.getActiveWorkbook()) return; // workbook being replaced
         const ws = doc.wb.getActiveSheet();
         const r = ws.getActiveRange();
         const rect = r?.getRange() ?? null;
@@ -66,11 +67,11 @@ export function useSelection(): SelInfo {
       });
     };
     update();
-    const d1 = wb.onSelectionChange(update);
+    // selection changes are operations, so the command stream covers them; Univer's onSelectionChange
+    // facade throws while a workbook is being swapped, so it is not used.
     const d2 = wb.onCommandExecuted(update);
     return () => {
       cancelAnimationFrame(raf);
-      d1.dispose();
       d2.dispose();
     };
   }, [snap.activeSheetId, snap.file]);

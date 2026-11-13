@@ -8,6 +8,7 @@ import { NumFmtDialog, CfDialog, FindDialog, FunctionsDialog, AboutDialog } from
 import { useKeyboardOpen, useMedia } from './ui/hooks';
 import { ui, useUi } from './ui/store';
 import { prefs } from './state/storage';
+import { fileActions } from './ui/actions';
 
 // Heavy, rarely used panels are code-split and loaded on demand.
 const ChartPanel = lazy(() => import('./charts/ChartPanel'));
@@ -64,10 +65,10 @@ export default function App() {
       if (!(e.ctrlKey || e.metaKey)) return;
       if (e.key === 's') {
         e.preventDefault();
-        import('./ui/actions').then((m) => m.fileActions.save());
+        fileActions.save();
       } else if (e.key === 'o') {
         e.preventDefault();
-        import('./ui/actions').then((m) => m.fileActions.open());
+        fileActions.open();
       } else if (e.key === 'f') {
         e.preventDefault();
         ui.open('find');

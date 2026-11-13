@@ -163,8 +163,9 @@ export function FindDialog() {
   const finder = async () => {
     const f = await (doc.api as unknown as { createTextFinderAsync(t: string): Promise<FinderT | null> }).createTextFinderAsync(q);
     if (!f) return null;
-    await f.matchCaseAsync(matchCase);
-    await f.matchEntireCellAsync(whole);
+    // these promises only settle when the option actually changes, so call them for non-defaults only
+    if (matchCase) await f.matchCaseAsync(true);
+    if (whole) await f.matchEntireCellAsync(true);
     return f;
   };
   type FinderT = {
