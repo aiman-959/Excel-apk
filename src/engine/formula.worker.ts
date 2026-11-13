@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { FormulaEngine } from './formulaCore';
 import { rpcServe } from './rpc';
+import { pauseBackground } from '../device/shared';
 
 const engine = new FormulaEngine();
 
@@ -9,7 +10,10 @@ const api = {
   removeSheet: (id: string) => engine.removeSheet(id),
   renameSheet: (id: string, name: string) => engine.renameSheet(id, name),
   suspend: () => engine.suspend(),
-  loadRows: (id: string, rowStart: number, rows: never) => engine.loadRows(id, rowStart, rows),
+  loadRows: (id: string, rowStart: number, rows: never) => {
+    pauseBackground();
+    return engine.loadRows(id, rowStart, rows);
+  },
   resumeAll: () => engine.resumeAll(),
   setCells: (id: string, cells: never) => engine.setCells(id, cells),
   replaceSheet: (id: string, rows: never) => engine.replaceSheet(id, rows),

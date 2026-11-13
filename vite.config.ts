@@ -4,6 +4,8 @@ import { defineConfig } from 'vite';
 // Release build: minified, split into vendor chunks + lazily loaded feature panels.
 // Formula engine (HyperFormula), file IO (ExcelJS/SheetJS), transforms (Arquero)
 // and macros each live in their own Web Worker bundle.
+const ISOLATION = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'credentialless' };
+
 export default defineConfig({
   plugins: [react()],
   base: './',
@@ -25,5 +27,8 @@ export default defineConfig({
     },
   },
   worker: { format: 'es' },
-  server: { host: true },
+  // Cross-origin isolation enables SharedArrayBuffer between the UI and workers
+  // (the Android app sets the same headers natively, see MainActivity.java).
+  server: { host: true, headers: ISOLATION },
+  preview: { headers: ISOLATION },
 });

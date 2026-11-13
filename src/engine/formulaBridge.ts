@@ -30,6 +30,7 @@ import {
 } from '@univerjs/sheets';
 import { FormulaDataModel } from '@univerjs/engine-formula';
 import { rpcClient, type RpcClient } from './rpc';
+import { governor } from '../device/governor';
 import { RuleFormulaSupport } from './ruleFormulas';
 import type { FormulaWorkerApi } from './formula.worker';
 import type { Raw, SheetChanges } from './formulaCore';
@@ -134,7 +135,7 @@ export class FormulaBridge {
           await this.rpc.call('loadRows', s.getSheetId(), r0, rows as never);
           done += r1 - r0 + 1;
           progress?.(done, total, 'Preparing formulas');
-          await new Promise((r) => setTimeout(r, 0)); // yield to keep UI responsive
+          await new Promise((r) => setTimeout(r, governor.yieldMs())); // yield to keep UI responsive (longer when hot)
         }
       }
       progress?.(total, total, 'Calculating');

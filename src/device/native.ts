@@ -17,6 +17,14 @@ export interface DeviceInfoPlugin {
   getInfo(): Promise<DeviceInfoResult>;
   /** Ask the window for the highest refresh rate mode (90/120 Hz) or default. */
   setHighRefreshRate(opts: { enabled: boolean }): Promise<{ refreshRate: number }>;
+  /** PowerManager thermal status (0 none … 6 shutdown), thermal headroom forecast and battery saver. */
+  getThermal(): Promise<ThermalInfo>;
+  addListener(event: 'thermal', fn: (t: ThermalInfo) => void): Promise<{ remove(): Promise<void> }>;
+}
+export interface ThermalInfo {
+  status: number;
+  headroom?: number;
+  powerSave?: boolean;
 }
 
 export interface PickedDoc {

@@ -5,6 +5,7 @@
  * (row chunks posted back as progress messages).
  */
 import { rpcServe, type RpcCtx } from '../engine/rpc';
+import { pauseBackground } from '../device/shared';
 import { parseXlsx, streamXlsx, type ParsedXlsx } from './xlsxRead';
 import { parseWithSheetJs, streamSheetJs, sheetToCsv, type ParsedSheetJs } from './csv';
 import { writeXlsx } from './xlsxWrite';
@@ -32,6 +33,7 @@ const api = {
     let step = gen.next();
     while (!step.done) {
       ctx.progress(step.value);
+      pauseBackground(); // eases off while the phone is hot (shared-memory level, see device/shared.ts)
       step = gen.next();
     }
     parsed = null; // free parser memory as soon as possible

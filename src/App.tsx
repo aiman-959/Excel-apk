@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useDraw } from './draw/state';
+import { governor } from './device/governor';
 import { doc } from './state/doc';
 import { detectTier } from './device/tier';
 import { isTouchDevice } from './univer/setup';
@@ -41,6 +42,7 @@ export default function App() {
       const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
       ui.setTheme(dark ? 'dark' : 'light');
       const tier = await detectTier();
+      governor.start(tier.refreshRate, tier.tier === 'high');
       if (cancelled || (window as unknown as { __booted?: boolean }).__booted) return;
       (window as unknown as { __booted?: boolean }).__booted = true;
       const q = new URLSearchParams(location.search);

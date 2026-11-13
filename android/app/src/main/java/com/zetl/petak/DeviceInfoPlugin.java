@@ -1,7 +1,11 @@
 package com.zetl.petak;
 
 import android.app.ActivityManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.PowerManager;
 import android.os.Build;
 import android.view.Display;
 import android.view.Window;
@@ -20,6 +24,60 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  */
 @CapacitorPlugin(name = "DeviceInfo")
 public class DeviceInfoPlugin extends Plugin {
+
+    private PowerManager.OnThermalStatusChangedListener thermalListener;
+    private BroadcastReceiver powerSaveReceiver;
+
+    /** Thermal status changes and battery saver toggles are pushed to JS as "thermal" events. */
+    @Override
+    public void load() {
+        PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+        if (pm == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            thermalListener = status -> notifyListeners("thermal", thermal());
+            pm.addThermalStatusListener(getContext().getMainExecutor(), thermalListener);
+        }
+        powerSaveReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context c, Intent i) {
+                notifyListeners("thermal", thermal());
+            }
+        };
+        IntentFilter f = new IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) getContext().registerReceiver(powerSaveReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+        else getContext().registerReceiver(powerSaveReceiver, f);
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+        if (pm != null && thermalListener != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) pm.removeThermalStatusListener(thermalListener);
+        if (powerSaveReceiver != null) {
+            try {
+                getContext().unregisterReceiver(powerSaveReceiver);
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+    }
+
+    private JSObject thermal() {
+        JSObject ret = new JSObject();
+        PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+        int status = 0;
+        if (pm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) status = pm.getCurrentThermalStatus();
+        ret.put("status", status);
+        if (pm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            float h = pm.getThermalHeadroom(10); // forecast 10 s ahead; 1.0 = throttling starts
+            if (!Float.isNaN(h)) ret.put("headroom", h);
+        }
+        ret.put("powerSave", pm != null && pm.isPowerSaveMode());
+        return ret;
+    }
+
+    @PluginMethod
+    public void getThermal(PluginCall call) {
+        call.resolve(thermal());
+    }
 
     @PluginMethod
     public void getInfo(PluginCall call) {

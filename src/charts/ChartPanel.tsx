@@ -12,6 +12,7 @@ import { activeRect } from '../ui/actions';
 import { parseRange, rectToA1 } from '../io/a1';
 import type { ChartDef } from '../io/types';
 import { chartOption, CHART_TYPES } from './chartOption';
+import { governor } from '../device/governor';
 import { getTier } from '../device/tier';
 import { useDoc } from '../ui/hooks';
 
@@ -31,7 +32,7 @@ function ChartCard({ def, onDelete }: { def: ChartDef; onDelete: () => void }) {
   useEffect(() => {
     const chart = echarts.init(box.current!, undefined, { renderer: 'canvas' });
     let t: ReturnType<typeof setTimeout>;
-    const draw = () => chart.setOption(chartOption(def, readValues(def), { dark, animate: getTier().animations !== 'reduced' }) as never, true);
+    const draw = () => chart.setOption(chartOption(def, readValues(def), { dark, animate: getTier().animations !== 'reduced' && governor.animationsAllowed() }) as never, true);
     const schedule = () => {
       clearTimeout(t);
       t = setTimeout(draw, 250); // debounce: many edits -> one redraw

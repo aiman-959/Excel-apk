@@ -4,6 +4,7 @@ import { NUMBER_FORMATS, activeRange, fmt, commitInput } from './actions';
 import { guard, ui } from './store';
 import { doc } from '../state/doc';
 import { getTier } from '../device/tier';
+import { governor } from '../device/governor';
 import type { CfRule } from '../io/types';
 import { rectToA1 } from '../io/a1';
 
@@ -278,6 +279,32 @@ function ModulesInfo() {
   );
 }
 
+const THERMAL = ['none', 'light', 'moderate', 'severe', 'critical', 'emergency', 'shutdown'];
+function LiveStats() {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const off = governor.subscribe(() => tick((x) => x + 1));
+    const id = setInterval(() => tick((x) => x + 1), 1000);
+    return () => {
+      off();
+      clearInterval(id);
+    };
+  }, []);
+  const g = governor.stats;
+  return (
+    <table className="preview">
+      <tbody>
+        <tr><th>Load level</th><td data-testid="load-level">{['normal', 'busy (background work spaced out)', 'hot (throttled, default refresh rate)'][g.level]}</td></tr>
+        <tr><th>Frame rate while scrolling</th><td>{g.fps ? `${g.fps} fps, ${Math.round(g.dropped * 100)} % dropped` : 'scroll the sheet to measure'}</td></tr>
+        <tr><th>Thermal status</th><td>{g.thermalStatus === null ? 'n/a (browser)' : THERMAL[g.thermalStatus] + (g.thermalHeadroom !== null ? ` · headroom ${g.thermalHeadroom.toFixed(2)}` : '')}</td></tr>
+        <tr><th>Battery saver</th><td>{g.powerSave ? 'on' : 'off'}</td></tr>
+        <tr><th>Worker data sharing</th><td data-testid="shared-mode">{g.shared}</td></tr>
+        <tr><th>Grid rendering</th><td>Canvas, GPU-composited (no DOM cells)</td></tr>
+      </tbody>
+    </table>
+  );
+}
+
 export function AboutDialog() {
   const t = getTier();
   const [mem, setMem] = useState<string>('');
@@ -303,6 +330,8 @@ export function AboutDialog() {
           <tr><th>Memory</th><td>{mem || 'n/a'}</td></tr>
         </tbody>
       </table>
+      <h4>Live performance</h4>
+      <LiveStats />
       <h4>Downloaded modules</h4>
       <ModulesInfo />
       <h4>Built with</h4>

@@ -1,4 +1,5 @@
 /** Minimal promise-based RPC over postMessage, with Transferable support. */
+import { connectWorker, disconnectWorker, handleControl } from '../device/shared';
 
 type Pending = { resolve: (v: unknown) => void; reject: (e: unknown) => void; onProgress?: (p: unknown) => void };
 
@@ -34,12 +35,14 @@ export function rpcClient<T>(worker: Worker): RpcClient<T> {
       pending.set(id, { resolve, reject, onProgress });
       worker.postMessage({ id, method, args }, transfer);
     });
+  connectWorker(worker);
   return {
     worker,
     call: ((method: PropertyKey, ...args: unknown[]) => send(method, args)) as RpcClient<T>['call'],
     callT: ((method: PropertyKey, args: unknown[], transfer: Transferable[], onProgress?: (p: unknown) => void) =>
       send(method, args, transfer, onProgress)) as RpcClient<T>['callT'],
     terminate: () => {
+      disconnectWorker(worker);
       worker.terminate();
       for (const p of pending.values()) p.reject(new Error('Worker terminated'));
       pending.clear();
@@ -54,6 +57,7 @@ export interface RpcCtx {
 }
 export function rpcServe(impl: Record<string, (...args: never[]) => unknown>, scope: { postMessage: Worker['postMessage']; onmessage: unknown } = self as never) {
   (scope as { onmessage: (e: MessageEvent) => void }).onmessage = async (e: MessageEvent) => {
+    if (handleControl(e.data)) return;
     const { id, method, args } = e.data ?? {};
     let transfer: Transferable[] = [];
     const ctx: RpcCtx = {

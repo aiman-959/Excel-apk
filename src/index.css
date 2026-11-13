@@ -216,3 +216,6 @@ table.preview th { background: var(--surface-2); position: sticky; top: 0; }
 .draw-props .len { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; }
 .draw-props .text-input { flex: 1; min-width: 100px; height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); padding: 0 8px; color: var(--text); }
 .layout-phone .bottombar button { min-width: 0; flex: 1; }
+
+/* load governor (device/governor.ts): no decorative motion while frames drop or the phone is hot */
+html[data-load='1'] *, html[data-load='2'] * { animation-duration: 0s !important; transition: none !important; }

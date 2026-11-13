@@ -17,6 +17,7 @@ import type { IoWorkerApi } from '../io/io.worker';
 import type { AppMeta, CfEntry, LoadChunk, LoadResult, ParsedMeta } from '../io/types';
 import { cfFromUniver, cfToUniver, type UCfRule } from '../univer/cf';
 import { getTier } from '../device/tier';
+import { governor } from '../device/governor';
 import { AutosaveTracker, loadSession } from './autosave';
 import { MIME, saveFile, type OpenedFile } from '../io/files';
 
@@ -116,7 +117,7 @@ class Doc {
     const repaint = () => {
       if (!this.meta.sparklines?.length) return;
       clearTimeout(rt);
-      rt = setTimeout(() => this.syncMetaRenderers(), 60);
+      rt = setTimeout(() => this.syncMetaRenderers(), governor.backgroundDelay(60));
     };
     this.bridge.onRecalc(repaint);
     setImageListener(() => this.syncMetaRenderers());
@@ -234,7 +235,7 @@ class Doc {
   }
   private scheduleAutosave() {
     clearTimeout(this.autosaveTimer);
-    this.autosaveTimer = setTimeout(() => this.autosave(), getTier().autosaveMs);
+    this.autosaveTimer = setTimeout(() => this.autosave(), governor.backgroundDelay(getTier().autosaveMs));
   }
   /** After a whole workbook was (re)loaded: everything must be written once. */
   private markAllForSave() {
