@@ -15,7 +15,8 @@
     "android:sync": "npm run build && cap sync android",
     "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "android:release": "npm run android:sync && cd android && ./gradlew assembleRelease",
-    "icons": "node scripts/gen-icons.mjs"
+    "icons": "node scripts/gen-icons.mjs",
+    "size": "node scripts/size-report.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.2",

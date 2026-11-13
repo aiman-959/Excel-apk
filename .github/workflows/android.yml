@@ -59,20 +59,37 @@ jobs:
         run: |
           mkdir -p out
           V=$(node -p "require('./package.json').version")
-          cp android/app/build/outputs/apk/debug/app-debug.apk "out/Petak-v$V-debug.apk"
-          for f in android/app/build/outputs/apk/release/*.apk; do
-            case "$f" in *unsigned*) cp "$f" "out/Petak-v$V-unsigned.apk" ;; *) cp "$f" "out/Petak-v$V.apk" ;; esac
+          # universal APKs keep the plain names; per-ABI APKs get the ABI in the name
+          cp android/app/build/outputs/apk/release/app-universal-release.apk "out/Petak-v$V.apk"
+          cp android/app/build/outputs/apk/debug/app-universal-debug.apk "out/Petak-v$V-debug.apk"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            cp "android/app/build/outputs/apk/release/app-$abi-release.apk" "out/Petak-v$V-$abi.apk"
           done
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::No release key configured (KEYSTORE_BASE64 secret): release APKs are signed with this runner's debug key."
+          fi
+          (cd out && sha256sum *.apk > SHA256SUMS.txt)
           ls -la out
+
+      - name: Size report
+        run: |
+          node scripts/size-report.mjs --summary
+          cp SIZE.md out/
 
       - uses: actions/upload-artifact@v4
         with:
           name: Petak-apks
-          path: out/*.apk
+          path: |
+            out/*.apk
+            out/SHA256SUMS.txt
+            out/SIZE.md
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: out/*.apk
+          files: |
+            out/*.apk
+            out/SHA256SUMS.txt
+            out/SIZE.md
           generate_release_notes: true

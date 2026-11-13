@@ -15,6 +15,10 @@ android {
             abiFilters "arm64-v8a", "armeabi-v7a", "x86_64"
         }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // English UI only: drops the ~80 translations bundled by AndroidX libraries
+        androidResources {
+            localeFilters += ["en"]
+        }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -36,6 +40,17 @@ android {
             }
         }
     }
+    // Per-ABI APKs plus a universal one. Petak has no native (.so) code (DuckDB is
+    // WebAssembly, downloaded on demand), so the ABI APKs differ only in their
+    // manifest/version code; they exist so stores and side-loaders can pick by ABI.
+    splits {
+        abi {
+            enable true
+            reset()
+            include "arm64-v8a", "armeabi-v7a", "x86_64"
+            universalApk true
+        }
+    }
     buildTypes {
         debug {
             applicationIdSuffix ".debug"
@@ -45,7 +60,9 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            if (ksPath) signingConfig signingConfigs.release
+            // Without a release key (forks, CI without secrets) the release build is signed
+            // with the debug key so it can still be installed for testing.
+            signingConfig ksPath ? signingConfigs.release : signingConfigs.debug
         }
     }
 }
