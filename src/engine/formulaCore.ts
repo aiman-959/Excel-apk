@@ -24,6 +24,19 @@ export interface SheetChanges {
   cells: CellOut[];
 }
 
+function formulaCells(rows: Raw[][]): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    for (let c = 0; c < row.length; c++) {
+      const v = row[c];
+      if (typeof v === 'string' && v.length > 1 && v.charCodeAt(0) === 61 /* = */) out.push([r, c]);
+    }
+  }
+  return out;
+}
+
 export class FormulaEngine {
   hf: HyperFormula;
   private idToHf = new Map<string, number>();
@@ -46,6 +59,7 @@ export class FormulaEngine {
   ];
   /** Sheets being bulk-loaded: built in one go with buildFromSheets (≈6x faster than cell-by-cell). */
   private pending: Map<string, { name: string; rows: Raw[][] }> | null = null;
+  private loadedFormulas = new Map<string, Array<[number, number]>>();
 
   constructor() {
     registerCustomFunctions();
@@ -131,7 +145,10 @@ export class FormulaEngine {
         sheets[n] = rows as RawCellContent[][];
         ids.push([sheetId, n]);
       }
+      const formulaPos = new Map<string, Array<[number, number]>>();
+      for (const [sheetId, { rows }] of this.pending) formulaPos.set(sheetId, formulaCells(rows));
       this.pending = null;
+      this.loadedFormulas = formulaPos;
       this.hf.destroy();
       this.hf = HyperFormula.buildFromSheets(sheets, this.config, this.namedExpressions);
       for (const [sheetId, n] of ids) {
@@ -140,20 +157,15 @@ export class FormulaEngine {
         this.hfToId.set(hfId, sheetId);
       }
     }
+    // Formula positions come from the loaded rows: HyperFormula's getSheetFormulas() returns a dense
+    // array sized to the sheet's extent, which explodes for a sheet using e.g. cell XFD1048576.
     const out: SheetChanges[] = [];
-    for (const [sheetId, id] of this.idToHf) {
-      const cells: CellOut[] = [];
-      const formulas = this.hf.getSheetFormulas(id);
-      for (let r = 0; r < formulas.length; r++) {
-        const row = formulas[r];
-        if (!row) continue;
-        for (let c = 0; c < row.length; c++) {
-          if (row[c] === undefined) continue;
-          cells.push(this.cellOut(id, r, c));
-        }
-      }
-      if (cells.length) out.push({ sheetId, cells });
+    for (const [sheetId, pos] of this.loadedFormulas) {
+      const id = this.idToHf.get(sheetId);
+      if (id === undefined || !pos.length) continue;
+      out.push({ sheetId, cells: pos.map(([r, c]) => this.cellOut(id, r, c)) });
     }
+    this.loadedFormulas = new Map();
     return out;
   }
 
@@ -171,14 +183,10 @@ export class FormulaEngine {
     const id = this.sheet(sheetId);
     for (const r of rows) for (let i = 0; i < r.length; i++) r[i] = norm(r[i]);
     const changes = this.hf.setSheetContent(id, rows as RawCellContent[][]);
-    const res = this.collect(changes);
-    // setSheetContent reports changed cells; also ensure every formula in this sheet is reported
-    const all = this.resumeAll().find((s) => s.sheetId === sheetId);
-    if (all) {
-      const existing = res.find((s) => s.sheetId === sheetId);
-      if (existing) existing.cells = all.cells;
-      else res.push(all);
-    }
+    const res = this.collect(changes).filter((x) => x.sheetId !== sheetId);
+    // report every formula of this sheet (positions taken from the rows, never a dense HF export)
+    const cells = formulaCells(rows).map(([r, c]) => this.cellOut(id, r, c));
+    if (cells.length) res.push({ sheetId, cells });
     return res;
   }
 

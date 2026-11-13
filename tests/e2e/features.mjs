@@ -14,14 +14,33 @@ import assert from 'node:assert/strict';
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:5173/';
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-e2e-'));
-const launch = { executablePath: process.env.CHROMIUM_PATH || undefined };
+const launch = { executablePath: process.env.CHROMIUM_PATH || undefined, args: process.env.CHROME_ARGS ? process.env.CHROME_ARGS.split(' ') : [] };
 const results = [];
 const step = async (name, fn) => {
   currentStep = name;
   const t0 = Date.now();
+  if (process.env.PROFILE_STEP && name.startsWith(process.env.PROFILE_STEP)) {
+    await heapCdp.send('Profiler.enable');
+    await heapCdp.send('Profiler.start');
+    setTimeout(async () => {
+      const { profile } = await heapCdp.send('Profiler.stop');
+      const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+      const self = new Map();
+      profile.samples.forEach((sm, i) => {
+        const n = byId.get(sm);
+        const k = n.callFrame.functionName + ' ' + n.callFrame.url.split('/').pop() + ':' + n.callFrame.lineNumber + ':' + n.callFrame.columnNumber;
+        self.set(k, (self.get(k) || 0) + (profile.timeDeltas[i] || 0));
+      });
+      console.log([...self].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => '   PROF ' + (v / 1000).toFixed(0) + 'ms ' + k).join('\n'));
+    }, 12000);
+  }
   try {
     await fn();
     results.push(['PASS', name, Date.now() - t0]);
+    if (process.env.DEBUG_HEAP) {
+      const m = (await heapCdp.send('Performance.getMetrics')).metrics.find((x) => x.name === 'JSHeapUsedSize').value;
+      console.log('    heap', (m / 1048576).toFixed(0), 'MB');
+    }
     console.log(`  ✔ ${name} (${Date.now() - t0} ms)`);
   } catch (e) {
     results.push(['FAIL', name, Date.now() - t0]);
@@ -64,6 +83,8 @@ const browser = await chromium.launch(launch);
 const ctx = await browser.newContext({ ...devices['Pixel 7'], acceptDownloads: true });
 const page = await ctx.newPage();
 const errors = [];
+const heapCdp = await ctx.newCDPSession(page);
+await heapCdp.send('Performance.enable');
 let currentStep = '';
 page.on('pageerror', (e) => errors.push(`[${currentStep}] ${e.message}\n${(e.stack ?? '').split('\n').slice(1, 4).join('\n')}`));
 const ev = (fn, arg) => page.evaluate(fn, arg);
@@ -194,6 +215,23 @@ await step('3e find & replace', async () => {
   await page.keyboard.press('Escape');
   await idle();
   assert.equal(await val('F8'), 0, 'SUMIFS now finds no "North"');
+});
+
+await step('3f grid grows past column Z up to XFD1048576', async () => {
+  await page.fill('input.ref', 'AZ30');
+  await page.press('input.ref', 'Enter');
+  await page.waitForTimeout(200);
+  assert.ok(await ev(() => window.__doc.wb.getActiveSheet().getMaxColumns()) > 52);
+  await page.fill('input.ref', process.env.GROW_TARGET ?? 'XFD1048576');
+  await page.press('input.ref', 'Enter');
+  await page.waitForTimeout(300);
+  assert.deepEqual(await ev(() => { const s = window.__doc.wb.getActiveSheet(); return [s.getMaxRows(), s.getMaxColumns()]; }), [1048576, 16384]);
+  await typeIn('XFD1048576', '5');
+  await typeIn('AA1', '=XFD1048576+1');
+  assert.equal(await val('AA1'), 6);
+  await ev(() => { const s = window.__doc.wb.getActiveSheet(); s.getRange('XFD1048576').clearContent(); s.getRange('AA1').clearContent(); });
+  await idle();
+  await select('A1');
 });
 
 // ---------------------------------------------------------------- 4. formatting

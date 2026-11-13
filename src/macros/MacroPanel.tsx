@@ -71,7 +71,8 @@ function applyOps(res: MacroResult) {
     const ws = wb.getSheetByName(batch.sheet);
     if (ws) {
       const maxR = Math.max(...Object.keys(batch.cells).map(Number));
-      if (ws.getMaxRows() <= maxR) ws.setRowCount(maxR + 100);
+      const maxC = Math.max(...Object.values(batch.cells).flatMap((r) => Object.keys(r).map(Number)));
+      doc.ensureSize(ws.getSheetId(), maxR + 1, maxC + 1);
       doc.api.syncExecuteCommand(SetRangeValuesCommand.id, { unitId: wb.getId(), subUnitId: ws.getSheetId(), value: batch.cells });
     }
     batch = null;

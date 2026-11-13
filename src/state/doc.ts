@@ -92,7 +92,9 @@ class Doc {
     const cmd = this.injector<ICommandService>(ICommandService);
     cmd.onCommandExecuted((info, options) => {
       if (this.loading) return;
-      const opt = options as { fromFormulaEngine?: boolean; onlyLocal?: boolean } | undefined;
+      const opt = options as { fromFormulaEngine?: boolean; onlyLocal?: boolean; autoGrow?: boolean } | undefined;
+      if (opt?.autoGrow) return;
+      if (info.id === 'sheet.operation.set-scroll' || info.id === 'sheet.operation.set-selections') this.scheduleGrow();
       // only real workbook changes count (editor-internal doc mutations and auto row heights do not)
       if (info.type === 2 /* MUTATION */ && /^sheet\.mutation\./.test(info.id) && !/auto-height/.test(info.id)) {
         const p = info.params as { subUnitId?: string; cellValue?: Record<string, unknown> } | undefined;
@@ -104,6 +106,49 @@ class Doc {
       }
       if (/sheet|worksheet/.test(info.id)) this.refreshSheets();
     });
+  }
+
+  // ---------------------------------------------------------------- grid size
+  /** Same limits as desktop spreadsheets: 1,048,576 rows x 16,384 columns (A..XFD). */
+  static readonly MAX_ROWS = 1_048_576;
+  static readonly MAX_COLS = 16_384;
+  private growRaf = 0;
+
+  /**
+   * Sheets start small (fast to lay out on phones) and grow as you scroll or move
+   * towards the edge, up to the maximum. Growing is not an edit: no undo step, not "dirty".
+   */
+  private scheduleGrow() {
+    cancelAnimationFrame(this.growRaf);
+    this.growRaf = requestAnimationFrame(() => {
+      const wb = this.h.api.getActiveWorkbook();
+      if (!wb) return;
+      const ws = wb.getActiveSheet();
+      const vis = ws.getVisibleRange();
+      const sel = ws.getActiveRange()?.getRange();
+      const lastRow = Math.max(vis?.endRow ?? 0, sel?.endRow ?? 0);
+      const lastCol = Math.max(vis?.endColumn ?? 0, sel?.endColumn ?? 0);
+      this.ensureSize(ws.getSheetId(), lastRow + 1, lastCol + 1, true);
+    });
+  }
+
+  /** Make sure the sheet has at least `rows` x `cols` (+ headroom when `headroom`). */
+  ensureSize(sheetId: string, rows: number, cols: number, headroom = false) {
+    const ws = this.wb.getSheetBySheetId(sheetId);
+    if (!ws) return;
+    const unitId = this.wb.getId();
+    const maxR = ws.getMaxRows();
+    const maxC = ws.getMaxColumns();
+    const needR = headroom ? rows + 200 : rows; // grow early so scrolling never hits a wall
+    const needC = headroom ? cols + 10 : cols;
+    if (needR > maxR && maxR < Doc.MAX_ROWS) {
+      const rowCount = Math.min(Doc.MAX_ROWS, Math.max(needR, maxR + 1000));
+      this.h.api.syncExecuteCommand('sheet.mutation.set-worksheet-row-count', { unitId, subUnitId: sheetId, rowCount }, { onlyLocal: true, autoGrow: true } as never);
+    }
+    if (needC > maxC && maxC < Doc.MAX_COLS) {
+      const columnCount = Math.min(Doc.MAX_COLS, Math.max(needC, maxC + 26));
+      this.h.api.syncExecuteCommand('sheet.mutation.set-worksheet-column-count', { unitId, subUnitId: sheetId, columnCount }, { onlyLocal: true, autoGrow: true } as never);
+    }
   }
 
   // ---------------------------------------------------------------- sheets

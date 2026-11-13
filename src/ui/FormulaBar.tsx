@@ -80,6 +80,8 @@ export function FormulaBar() {
       const ws = r.sheet ? wb.getSheetByName(r.sheet) : wb.getActiveSheet();
       if (!ws) throw new Error('No sheet ' + r.sheet);
       if (r.sheet) wb.setActiveSheet(ws);
+      if (r.r1 >= 1_048_576 || r.c1 >= 16_384) throw new Error('Beyond the last cell (XFD1048576)');
+      doc.ensureSize(ws.getSheetId(), r.r1 + 1, r.c1 + 1, true);
       ws.getRange(r.r0, r.c0, r.r1 - r.r0 + 1, r.c1 - r.c0 + 1).activate();
       ws.scrollToCell(r.r0, r.c0);
       setRefText('');

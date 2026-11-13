@@ -146,7 +146,7 @@ to get a signed release APK.
 npm run dev            # http://localhost:5173  (?mobile, ?desktop, ?tier=low|mid|high, ?fresh)
 npm test               # unit tests (formulas, xlsx/csv/VBA round trip, transforms, pivots, macros)
 npm run build && npm run preview &                  # serve the production build on :4173
-BASE_URL=http://localhost:4173/ npm run test:e2e   # end-to-end test of features 1-9 (18 checks)
+BASE_URL=http://localhost:4173/ npm run test:e2e   # end-to-end test of features 1-9 (19 checks)
 BASE_URL=http://localhost:4173/ npm run test:perf  # 50k x 20 load / scroll / memory test -> tests/perf/RESULTS.md
 ```
 Playwright needs a Chromium: `npx playwright install chromium`, or point `CHROMIUM_PATH` at an existing one.
@@ -168,6 +168,18 @@ android/app/src/main/java/org/opencells/app/
   MainActivity.java, DeviceInfoPlugin.java (RAM/cores/SoC/refresh rate), DocumentsPlugin.java (SAF)
 tests/unit  tests/e2e  tests/perf
 ```
+
+## How it compares to desktop Excel
+OpenCells is **not a clone of Microsoft Excel**. It is an independent, original app that opens and saves the same
+file formats and covers the everyday spreadsheet work listed above. It does not copy Excel's look or branding.
+
+| | OpenCells | Desktop Excel |
+|---|---|---|
+| Grid size | 1,048,576 rows × 16,384 columns (A…XFD), grows as you scroll | same |
+| Functions | ~420 (HyperFormula) incl. XLOOKUP, IFS, SUMIFS, FILTER, UNIQUE, SORT | ~500 |
+| Not available | VBA execution, Power Pivot / data model, 3D/advanced chart types, slicers, images & shapes, comments, data validation, sparklines, what-if analysis, external data connections, co-authoring | — |
+| Macros | JavaScript (sandboxed); VBA kept in .xlsm but not run | VBA, Office Scripts |
+| Data transforms | 9 step types, refreshable | Power Query (M language) |
 
 ## Known limitations
 * VBA macros are kept but never executed. JavaScript macros cover the automation use case.
