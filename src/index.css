@@ -66,7 +66,7 @@ input, select, textarea { font: inherit; color: var(--text); }
 .app { display: flex; flex-direction: column; height: 100%; padding-top: var(--safe-top); }
 .main { flex: 1; display: flex; min-height: 0; position: relative; }
 .grid-wrap { flex: 1; position: relative; min-width: 0; background: var(--surface); }
-.grid-host { position: absolute; inset: 0; overflow: hidden; }
+.grid-host { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
 .fbar.placeholder { height: 54px; }
 .tabs.placeholder { height: 44px; }
 .bottombar.placeholder { height: calc(59px + var(--safe-bottom)); }
@@ -181,3 +181,38 @@ table.preview th { background: var(--surface-2); position: sticky; top: 0; }
 .input-hint { position: absolute; left: 8px; right: 8px; bottom: 100%; margin-bottom: 6px; background: var(--accent-soft); color: var(--accent-strong); border: 1px solid var(--accent); border-radius: 10px; padding: 8px 12px; font-size: 13px; z-index: 25; }
 .layout-tablet .input-hint { bottom: auto; top: 100%; margin: 6px 0 0; }
 .slicer { border: 1px solid var(--border); border-radius: 14px; padding: 8px 10px 12px; margin-bottom: 12px; background: var(--surface); }
+
+/* ---------------------------------------------------------------- drawing mode */
+.draw-layer { position: absolute; inset: 0; z-index: 5; overflow: hidden; }
+.draw-overlay { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.ruler { position: absolute; left: 0; top: 0; pointer-events: none; }
+.loupe { position: absolute; display: none; border-radius: 50%; box-shadow: 0 0 0 2px #15803d, 0 6px 18px rgba(0, 0, 0, 0.3); pointer-events: none; z-index: 3; }
+.draw-bar { position: absolute; top: 28px; left: 52px; right: 6px; display: flex; gap: 2px; align-items: center; overflow-x: auto; scrollbar-width: none; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); z-index: 4; }
+.draw-bar::-webkit-scrollbar { display: none; }
+.draw-bar .sep { width: 1px; align-self: stretch; background: var(--border); margin: 4px 3px; flex: none; }
+.dbtn { flex: none; width: 44px; height: 44px; border-radius: 10px; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; color: var(--text); }
+.dbtn.on { background: var(--accent-soft); color: var(--accent-strong); }
+.dbtn:disabled { opacity: 0.35; }
+.unit-select { flex: none; height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); padding: 0 4px; font-weight: 600; }
+.draw-pop { position: absolute; top: 86px; right: 6px; width: min(340px, calc(100% - 64px)); max-height: 60%; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 10px; z-index: 4; }
+.draw-pop-list { display: flex; flex-direction: column; gap: 8px; }
+.draw-pop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
+.draw-pop-grid .secondary { grid-column: span 2; height: 44px; }
+.draw-pop-grid .hint, .draw-pop .hint { grid-column: 1 / -1; font-size: 12px; color: var(--text-2); margin: 4px 0 0; }
+.draw-pop .check { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.draw-pop .check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.layer-row { display: flex; align-items: center; gap: 2px; border-radius: 10px; padding-left: 6px; }
+.layer-row.on { background: var(--accent-soft); }
+.layer-name { flex: 1; text-align: left; border: 0; background: transparent; min-height: 40px; cursor: pointer; font-weight: 600; }
+.layer-name small { color: var(--text-2); font-weight: 400; }
+.draw-props { position: absolute; left: 52px; right: 6px; bottom: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 6px 8px; z-index: 4; display: flex; flex-direction: column; gap: 6px; }
+.num-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.num-field { display: flex; align-items: center; gap: 4px; background: var(--surface-2); border-radius: 8px; padding: 0 6px; height: 36px; font-size: 13px; }
+.num-field > span { color: var(--text-2); font-weight: 600; }
+.num-field input { width: 64px; height: 30px; border: 0; background: transparent; font: inherit; font-variant-numeric: tabular-nums; color: var(--text); }
+.num-field input[type='color'] { width: 30px; padding: 0; }
+.num-field em { font-style: normal; color: var(--text-2); font-size: 11px; }
+.num-field .mini { border: 0; background: transparent; font-size: 11px; text-decoration: underline; cursor: pointer; color: var(--text-2); }
+.draw-props .len { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; }
+.draw-props .text-input { flex: 1; min-width: 100px; height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); padding: 0 8px; color: var(--text); }
+.layout-phone .bottombar button { min-width: 0; flex: 1; }

@@ -6,6 +6,7 @@ import type { IWorkbookData, ICellData, IWorksheetData } from '@univerjs/core';
 import { ICommandService, IResourceManagerService, UniverInstanceType } from '@univerjs/core';
 import { RES_THREADS } from '../io/review';
 import { setSparklines } from '../features/sparklines';
+import { setDrawings, setImageListener } from '../draw/render';
 import type { FWorkbook } from '@univerjs/sheets/facade';
 import { FormulaDataModel } from '@univerjs/engine-formula';
 import { SheetSkeletonService } from '@univerjs/sheets';
@@ -118,6 +119,7 @@ class Doc {
       rt = setTimeout(() => this.syncMetaRenderers(), 60);
     };
     this.bridge.onRecalc(repaint);
+    setImageListener(() => this.syncMetaRenderers());
     this.repaintSparklines = repaint;
     const cmd = this.injector<ICommandService>(ICommandService);
     cmd.onCommandExecuted((info, options) => {
@@ -255,6 +257,7 @@ class Doc {
     });
     this.meta = emptyMeta();
     setSparklines([]);
+    setDrawings(undefined, 'mm');
     await this.bridge.attach(fwb);
     this.loading = false;
     this.emit({ file: { name, format: 'xlsx', vba: null }, dirty: false, savedAt: null });
@@ -298,6 +301,7 @@ class Doc {
     const fwb = this.h.api.createWorkbook({ id: unitId, name: file.name, styles: res.styles, sheetOrder: order, sheets, resources } as Partial<IWorkbookData>);
     this.meta = { ...emptyMeta(), ...(res.meta ?? {}) };
     setSparklines(this.meta.sparklines ?? []);
+    setDrawings(this.meta.drawings, this.meta.drawUnit ?? 'mm');
     this.applyCf(res.cf);
     await this.bridge.attach(fwb, ui.progress);
     this.loading = false;
@@ -431,6 +435,7 @@ class Doc {
     const fwb = this.h.api.createWorkbook(s.data);
     this.meta = { ...emptyMeta(), ...extra.meta };
     setSparklines(this.meta.sparklines ?? []);
+    setDrawings(this.meta.drawings, this.meta.drawUnit ?? 'mm');
     // the saved session carries Univer's plugin resources (conditional formats, notes, comments,
     // validation, filters); only very old sessions need the separate CF list
     if (!s.data.resources?.length) this.applyCf(extra.cf ?? []);
@@ -450,6 +455,7 @@ class Doc {
   /** Push metadata that affects rendering (sparklines) to the renderers. */
   syncMetaRenderers() {
     setSparklines(this.meta.sparklines ?? []);
+    setDrawings(this.meta.drawings, this.meta.drawUnit ?? 'mm');
     try {
       this.wb.getActiveSheet().refreshCanvas();
     } catch {

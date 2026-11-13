@@ -35,6 +35,10 @@ export interface AppMeta {
   dataTables?: DataTableDef[];
   slicers?: SlicerDef[];
   dataModel?: DataModelDef;
+  /** drawing layer per sheet (shapes in sheet px at 100 % zoom) */
+  drawings?: Record<string, import('../draw/geometry').Drawing>;
+  /** unit for rulers, dimensions and exact input */
+  drawUnit?: import('../draw/geometry').Unit;
 }
 export interface DmField {
   table: string;

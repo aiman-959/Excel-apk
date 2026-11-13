@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { useDraw } from './draw/state';
 import { doc } from './state/doc';
 import { detectTier } from './device/tier';
 import { isTouchDevice } from './univer/setup';
@@ -21,6 +22,7 @@ const SparklineDialog = lazy(() => import('./features/AnalysisDialogs').then((m)
 const WhatIfDialog = lazy(() => import('./features/AnalysisDialogs').then((m) => ({ default: m.WhatIfDialog })));
 const SlicersDialog = lazy(() => import('./features/AnalysisDialogs').then((m) => ({ default: m.SlicersDialog })));
 const DataModelDialog = lazy(() => import('./datamodel/DataModelDialog'));
+const DrawLayer = lazy(() => import('./draw/DrawLayer'));
 const ValidationDialog = lazy(() => import('./review/ReviewDialogs').then((m) => ({ default: m.ValidationDialog })));
 
 export default function App() {
@@ -30,6 +32,7 @@ export default function App() {
   const keyboard = useKeyboardOpen();
   const dialog = useUi((s) => s.dialog);
   const theme = useUi((s) => s.theme);
+  const drawing = useDraw((s) => s.active);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,6 +97,11 @@ export default function App() {
       <div className="main">
         <div className="grid-wrap">
           <div className="grid-host" ref={host} data-testid="grid" />
+          {ready && drawing && (
+            <Suspense fallback={null}>
+              <DrawLayer />
+            </Suspense>
+          )}
         </div>
         {tablet && ready && <SidePanel />}
       </div>

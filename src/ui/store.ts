@@ -18,7 +18,7 @@ export type DialogId =
   | 'whatif'
   | 'slicers'
   | 'datamodel';
-export type ToolTab = 'edit' | 'format' | 'insert' | 'data' | 'tools';
+export type ToolTab = 'edit' | 'format' | 'insert' | 'draw' | 'data' | 'tools';
 
 interface UiState {
   dialog: DialogId;

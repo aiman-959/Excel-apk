@@ -1,7 +1,7 @@
 /** App chrome: top bar, sheet tabs, phone bottom bar, tablet side panel, overlays. */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  Undo2, Redo2, FolderOpen, Save, MoreVertical, Moon, Sun, Plus, Pencil, LayoutGrid, Paintbrush, PlusSquare, Database, Wrench, X, FilePlus, Share2, Download, Copy, Trash2,
+  Undo2, Redo2, PenTool, FolderOpen, Save, MoreVertical, Moon, Sun, Plus, Pencil, LayoutGrid, Paintbrush, PlusSquare, Database, Wrench, X, FilePlus, Share2, Download, Copy, Trash2,
 } from 'lucide-react';
 import { useDoc } from './hooks';
 import { fileActions, sheets as sheetActions } from './actions';
@@ -129,6 +129,7 @@ const TABS: Array<{ id: ToolTab; label: string; icon: ReactNode }> = [
   { id: 'edit', label: 'Edit', icon: <Pencil size={22} /> },
   { id: 'format', label: 'Format', icon: <Paintbrush size={22} /> },
   { id: 'insert', label: 'Insert', icon: <PlusSquare size={22} /> },
+  { id: 'draw', label: 'Draw', icon: <PenTool size={22} /> },
   { id: 'data', label: 'Data', icon: <Database size={22} /> },
   { id: 'tools', label: 'Tools', icon: <Wrench size={22} /> },
 ];

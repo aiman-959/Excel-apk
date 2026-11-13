@@ -1,12 +1,20 @@
 import {
-  Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, WrapText, Merge, Split, Square, Grid3x3, PanelTop, PanelBottom, SquareDashed,
+  Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, WrapText, Merge, Split, Grid3x3, PanelTop, PanelBottom, SquareDashed,
   Hash, Highlighter, Eraser, Search, ArrowDownAZ, ArrowUpZA, Filter, FilterX, Snowflake, BarChart3, LineChart, PieChart, Table2, Sigma, FileSpreadsheet,
+  PenTool, Square, Circle, Minus, Spline, MoveUpRight, Type, ImagePlus, Ruler, Ratio,
   Code2, Workflow, Gauge, Rows3, Columns3, Trash2, Undo2, Redo2, ListX, Info, MessageSquare, ListChecks, Activity, Target, SlidersHorizontal, Network,
 } from 'lucide-react';
 import { Tool } from './Chrome';
 import { data, edit, fmt, sheets } from './actions';
 import { guard, ui, type ToolTab } from './store';
 import { useSelection } from './hooks';
+import { draw, type DrawTool } from '../draw/state';
+
+const startDraw = (tool: DrawTool, panel?: 'cellsize') => () => {
+  ui.setTab(matchMedia('(min-width: 760px)').matches ? ui.get().tab : null);
+  draw.open(tool);
+  if (panel) draw.set({ panel });
+};
 
 const COLORS = ['#14231a', '#4a5a50', '#b42318', '#e8772e', '#fbbf24', '#15803d', '#1e88c7', '#14532d', '#7c3aed', '#ffffff', '#fde2e4', '#ffe8cc', '#fef3c7', '#dcfce7', '#d0ebff', '#ede9fe'];
 
@@ -110,6 +118,31 @@ export function ToolPanel({ tab }: { tab: ToolTab }) {
             <Tool icon={<FileSpreadsheet />} label="New sheet" onClick={run(sheets.add)} />
           </div>
         </div>
+      );
+    case 'draw':
+      return (
+        <>
+          <div className="group">
+            <h4>Draw on the sheet</h4>
+            <div className="btn-grid">
+              <Tool icon={<PenTool />} label="Drawing mode" testId="tool-draw" onClick={startDraw('select')} />
+              <Tool icon={<Square />} label="Rectangle" onClick={startDraw('rect')} />
+              <Tool icon={<Circle />} label="Ellipse" onClick={startDraw('ellipse')} />
+              <Tool icon={<Minus />} label="Line" onClick={startDraw('line')} />
+              <Tool icon={<Spline />} label="Polyline" onClick={startDraw('polyline')} />
+              <Tool icon={<MoveUpRight />} label="Arrow" onClick={startDraw('arrow')} />
+              <Tool icon={<Type />} label="Text box" onClick={startDraw('text')} />
+              <Tool icon={<ImagePlus />} label="Image" onClick={startDraw('image')} />
+              <Tool icon={<Ruler />} label="Dimension" onClick={startDraw('dimension')} />
+            </div>
+          </div>
+          <div className="group">
+            <h4>Precision</h4>
+            <div className="btn-grid">
+              <Tool icon={<Ratio />} label="Cell size (mm)" testId="tool-cellsize" onClick={startDraw('select', 'cellsize')} />
+            </div>
+          </div>
+        </>
       );
     case 'data':
       return (

@@ -29,6 +29,11 @@ function mapSheetIds(meta: AppMeta, map: IdMap): AppMeta {
   m.queries?.forEach((q) => {
     if (q.source.kind === 'sheet') q.source.sheetId = map(q.source.sheetId) ?? q.source.sheetId;
   });
+  if (m.drawings) {
+    const dr: NonNullable<AppMeta['drawings']> = {};
+    for (const [k, v] of Object.entries(m.drawings)) dr[map(k) ?? k] = v;
+    m.drawings = dr;
+  }
   if (m.threads) {
     const t: Record<string, unknown[]> = {};
     for (const [k, list] of Object.entries(m.threads)) {

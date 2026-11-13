@@ -14,6 +14,7 @@ import { LocaleType, Univer, mergeLocales, UniverInstanceType } from '@univerjs/
 import { FUniver } from '@univerjs/core/facade';
 import { greenTheme } from '@univerjs/themes';
 import { registerSparklineRenderer } from '../features/sparklines';
+import { registerDrawingRenderer } from '../draw/render';
 import { UniverDocsPlugin } from '@univerjs/docs';
 import { UniverDocsUIPlugin } from '@univerjs/docs-ui';
 import { UniverFormulaEnginePlugin } from '@univerjs/engine-formula';
@@ -107,6 +108,7 @@ export function isTouchDevice(): boolean {
 
 export function createUniverApp(container: HTMLElement, opts: { mobile?: boolean } = {}): UniverHandle {
   registerSparklineRenderer();
+  registerDrawingRenderer();
   const mobile = opts.mobile ?? isTouchDevice();
   const univer = new Univer({
     theme: petakTheme,
