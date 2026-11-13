@@ -1,0 +1,48 @@
+{
+  "name": "app-tmp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/device": "^8.0.3",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3",
+    "@capawesome/capacitor-file-picker": "^8.1.1",
+    "@univerjs/preset-sheets-conditional-formatting": "^1.4.0",
+    "@univerjs/preset-sheets-core": "^1.4.0",
+    "@univerjs/preset-sheets-filter": "^1.4.0",
+    "@univerjs/preset-sheets-find-replace": "^1.4.0",
+    "@univerjs/preset-sheets-sort": "^1.4.0",
+    "@univerjs/presets": "^1.4.0",
+    "arquero": "^8.0.3",
+    "echarts": "^6.1.0",
+    "exceljs": "^4.4.0",
+    "fflate": "^0.8.3",
+    "hyperformula": "^3.5.0",
+    "lucide-react": "^1.72.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "rxjs": "^7.8.2",
+    "ssf": "^0.11.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.90.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  }
+}
