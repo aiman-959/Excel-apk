@@ -20,6 +20,7 @@
   "dependencies": {
     "@capacitor/android": "^8.6.2",
     "@capacitor/core": "^8.6.2",
+    "@duckdb/duckdb-wasm": "^1.32.0",
     "@univerjs/core": "1.4.0",
     "@univerjs/data-validation": "^1.4.0",
     "@univerjs/design": "1.4.0",

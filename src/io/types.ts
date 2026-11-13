@@ -34,6 +34,25 @@ export interface AppMeta {
   scenarios?: ScenarioDef[];
   dataTables?: DataTableDef[];
   slicers?: SlicerDef[];
+  dataModel?: DataModelDef;
+}
+export interface DmField {
+  table: string;
+  column: string;
+}
+export interface DataModelDef {
+  tables: Array<{ name: string; source: { kind: 'sheet'; sheetId: string; range: string } | { kind: 'query'; queryId: string } }>;
+  /** from = the "many" side (e.g. Sales.ProductId), to = the lookup side (Products.Id) */
+  relationships: Array<{ fromTable: string; fromColumn: string; toTable: string; toColumn: string }>;
+  pivots: DmPivot[];
+}
+export interface DmPivot {
+  id: string;
+  rows: DmField[];
+  col?: DmField;
+  value: DmField;
+  agg: 'sum' | 'count' | 'mean' | 'min' | 'max';
+  targetSheetName: string;
 }
 export interface ScenarioDef {
   id: string;
@@ -70,7 +89,7 @@ export interface SparklineDef {
 export interface ChartDef {
   id: string;
   title: string;
-  type: 'bar' | 'line' | 'pie';
+  type: 'bar' | 'line' | 'pie' | 'area' | 'doughnut' | 'scatter' | 'combo' | 'histogram' | 'waterfall';
   sheetId: string;
   range: string; // A1 range; first row = series names, first col = categories
 }
@@ -106,7 +125,8 @@ export interface QueryDef {
   name: string;
   source:
     | { kind: 'sheet'; sheetId: string; range?: string }
-    | { kind: 'file'; name: string; uri?: string; /** cached copy so refresh works offline */ cached?: { columns: string[]; rows: unknown[][] } };
+    | { kind: 'file'; name: string; uri?: string; /** cached copy so refresh works offline */ cached?: { columns: string[]; rows: unknown[][] } }
+    | { kind: 'url'; url: string; format: 'auto' | 'csv' | 'json' | 'xlsx'; cached?: { columns: string[]; rows: unknown[][] } };
   steps: TransformStep[];
   targetSheetName?: string;
 }

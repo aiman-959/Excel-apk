@@ -6,7 +6,23 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { unzipSync, strFromU8 } from 'fflate';
+import http from 'node:http';
 import { start, BASE } from './lib.mjs';
+
+// tiny local web server for the "import from URL" tests
+let hits = 0;
+const server = http.createServer((req, res) => {
+  hits++;
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.url.startsWith('/rates.json')) {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ updated: hits, data: [{ currency: 'EUR', rate: 1.08 + hits / 1000 }, { currency: 'GBP', rate: 1.27 }, { currency: 'JPY', rate: 0.0067 }] }));
+  } else {
+    res.setHeader('content-type', 'text/csv');
+    res.end('city,temp\nOslo,4\nRome,18\n');
+  }
+});
+await new Promise((r) => server.listen(4190, r));
 
 const t = await start('part2');
 const { page, step, ev, idle, val, select, typeIn, tool, fresh, download, openFile } = t;
@@ -248,4 +264,99 @@ await step('slicers: filter a table and a pivot', async () => {
   await page.keyboard.press('Escape');
 });
 
+// ---------------------------------------------------------------- more charts
+await step('charts: scatter, area, combo, histogram, waterfall, doughnut', async () => {
+  await ev(() => {
+    const ws = window.__doc.wb.insertSheet('ChartData');
+    window.__doc.wb.setActiveSheet(ws);
+    ws.getRange('A1:C6').setValues([['Month', 'Sales', 'Margin'], ['Jan', 100, 0.2], ['Feb', 120, 0.25], ['Mar', -40, 0.18], ['Apr', 160, 0.3], ['May', 90, 0.22]]);
+    return 0;
+  });
+  await select('A1:C6');
+  await tool('insert', 'tool-chart-bar');
+  for (const type of ['scatter', 'area', 'combo', 'histogram', 'waterfall', 'doughnut']) {
+    await page.click(`[data-testid=chart-type-${type}]`);
+    await page.click('[data-testid=chart-add]');
+  }
+  await page.waitForTimeout(800);
+  assert.equal(await page.locator('[data-testid=chart-card] canvas').count() >= 6, true);
+  assert.deepEqual(await ev(() => window.__doc.meta.charts.slice(0, 6).map((c) => c.type)), ['doughnut', 'waterfall', 'histogram', 'combo', 'area', 'scatter']);
+  await page.screenshot({ path: t.tmp + '/charts.png', fullPage: true });
+  await page.keyboard.press('Escape');
+});
+
+// ---------------------------------------------------------------- external data
+await step('import from URL (JSON) as a refreshable transform source', async () => {
+  await tool('data', 'tool-transform');
+  await page.fill('[data-testid=transform-url]', 'http://localhost:4190/rates.json');
+  await page.click('[data-testid=transform-url-go]');
+  await page.waitForSelector('[data-testid=transform-preview]');
+  assert.match(await page.textContent('[data-testid=transform-preview]'), /currency.*rate.*EUR/s);
+  await page.click('[data-testid=transform-load]');
+  await page.waitForFunction(() => !!window.__doc.wb.getSheetByName('rates'));
+  await idle();
+  const first = await ev(() => window.__doc.wb.getSheetByName('rates').getRange('B2').getValue());
+  await page.keyboard.press('Escape');
+  await tool('data', 'tool-transform');
+  await page.click('[data-testid=transform-refresh]');
+  await page.waitForTimeout(600);
+  await idle();
+  const second = await ev(() => window.__doc.wb.getSheetByName('rates').getRange('B2').getValue());
+  assert.ok(second > first, `refresh fetched new data (${first} -> ${second})`);
+  await page.keyboard.press('Escape');
+});
+
+// ---------------------------------------------------------------- data model (DuckDB, downloaded on demand)
+await step('data model: relationship + pivot across tables with DuckDB', async () => {
+  await ev(() => {
+    const wb = window.__doc.wb;
+    const s = wb.insertSheet('Sales');
+    s.getRange('A1:C6').setValues([['ProductId', 'Store', 'Amount'], [1, 'Oslo', 10], [2, 'Oslo', 5], [1, 'Rome', 7], [3, 'Rome', 4], [2, 'Rome', 6]]);
+    const p = wb.insertSheet('Products');
+    p.getRange('A1:B4').setValues([['Id', 'Category'], [1, 'Fruit'], [2, 'Fruit'], [3, 'Veg']]);
+    wb.setActiveSheet(s);
+    return 0;
+  });
+  await select('A1');
+  await tool('data', 'tool-datamodel');
+  await page.waitForSelector('[data-testid=duck-status]');
+  await page.fill('[data-testid=dm-table-name]', 'Sales');
+  await page.click('[data-testid=dm-add-table]');
+  await page.keyboard.press('Escape');
+  await ev(() => window.__doc.wb.setActiveSheet(window.__doc.wb.getSheetByName('Products')) && 0);
+  await select('A1');
+  await tool('data', 'tool-datamodel');
+  await page.fill('[data-testid=dm-table-name]', 'Products');
+  await page.click('[data-testid=dm-add-table]');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=dm-rel-from] option').length >= 5);
+  await page.selectOption('[data-testid=dm-rel-from]', 'Sales\u0001ProductId');
+  await page.selectOption('[data-testid=dm-rel-to]', 'Products\u0001Id');
+  await page.click('[data-testid=dm-add-rel]');
+  await page.selectOption('[data-testid=dm-p-row]', 'Products\u0001Category');
+  await page.selectOption('[data-testid=dm-p-col]', 'Sales\u0001Store');
+  await page.selectOption('[data-testid=dm-p-val]', 'Sales\u0001Amount');
+  await page.click('[data-testid=dm-pivot]');
+  // first use: confirm the download (size is shown)
+  await page.waitForSelector('[data-testid=confirm-text]', { timeout: 30000 });
+  const msg = await page.textContent('[data-testid=confirm-text]');
+  assert.match(msg, /Download \d+\.\d MB/);
+  await page.click('[data-testid=confirm-ok]');
+  await page.waitForFunction(() => !!window.__doc.wb.getSheetByName('Model pivot 1'), null, { timeout: 120000 });
+  await idle();
+  const v = await ev(() => window.__doc.wb.getSheetByName('Model pivot 1').getRange('A1:D5').getValues());
+  assert.deepEqual(v, [['Sum of Sales.Amount', null, null, null], ['Products.Category \\ Sales.Store', 'Oslo', 'Rome', 'Total'], ['Fruit', 15, 13, 28], ['Veg', null, 4, 4], ['Grand total', 15, 17, 32]], JSON.stringify(v));
+  console.log('    download prompt:', msg.split('\n').find((l) => /MB/.test(l)));
+  await page.keyboard.press('Escape');
+});
+
+await step('data model: SQL query (DuckDB now cached)', async () => {
+  await tool('data', 'tool-datamodel');
+  await page.fill('[data-testid=dm-sql]', 'SELECT p."Category", COUNT(*) AS n FROM "Sales" s JOIN "Products" p ON s."ProductId" = p."Id" GROUP BY 1 ORDER BY 1');
+  await page.click('[data-testid=dm-run]');
+  await page.waitForSelector('[data-testid=dm-result]', { timeout: 60000 });
+  assert.match(await page.textContent('[data-testid=dm-result]'), /Fruit4Veg1/);
+  await page.keyboard.press('Escape');
+});
+
+server.close();
 await t.finish();

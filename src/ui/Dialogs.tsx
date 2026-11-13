@@ -248,6 +248,36 @@ export function FunctionsDialog() {
   );
 }
 
+function ModulesInfo() {
+  const [state, setState] = useState<{ bytes: number } | null>(null);
+  const refresh = () => import('../modules/remote').then(async (m) => setState({ bytes: await m.cachedBytes() }));
+  useEffect(() => {
+    refresh();
+  }, []);
+  if (!state) return <p className="muted">Checking…</p>;
+  if (!state.bytes) return <p className="muted">None. DuckDB (data model) downloads on first use.</p>;
+  return (
+    <div className="list-item">
+      <span className="grow" data-testid="modules-size">
+        DuckDB data-model engine · {(state.bytes / 1e6).toFixed(1)} MB
+      </span>
+      <button
+        className="danger"
+        onClick={() =>
+          guard(async () => {
+            const m = await import('../modules/remote');
+            await m.remove(m.duckdbModule('eh'));
+            await m.remove(m.duckdbModule('mvp'));
+            await refresh();
+          }, 'Removed')
+        }
+      >
+        Remove
+      </button>
+    </div>
+  );
+}
+
 export function AboutDialog() {
   const t = getTier();
   const [mem, setMem] = useState<string>('');
@@ -273,6 +303,8 @@ export function AboutDialog() {
           <tr><th>Memory</th><td>{mem || 'n/a'}</td></tr>
         </tbody>
       </table>
+      <h4>Downloaded modules</h4>
+      <ModulesInfo />
       <h4>Built with</h4>
       <p className="muted">
         Univer (Apache-2.0), HyperFormula (GPL-3.0), SheetJS CE (Apache-2.0), ExcelJS (MIT), Arquero (BSD-3-Clause), ECharts (Apache-2.0), React (MIT), Capacitor (MIT), Lucide (ISC). See THIRD_PARTY_LICENSES.

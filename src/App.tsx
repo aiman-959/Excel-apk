@@ -20,6 +20,7 @@ const CommentsDialog = lazy(() => import('./review/ReviewDialogs').then((m) => (
 const SparklineDialog = lazy(() => import('./features/AnalysisDialogs').then((m) => ({ default: m.SparklineDialog })));
 const WhatIfDialog = lazy(() => import('./features/AnalysisDialogs').then((m) => ({ default: m.WhatIfDialog })));
 const SlicersDialog = lazy(() => import('./features/AnalysisDialogs').then((m) => ({ default: m.SlicersDialog })));
+const DataModelDialog = lazy(() => import('./datamodel/DataModelDialog'));
 const ValidationDialog = lazy(() => import('./review/ReviewDialogs').then((m) => ({ default: m.ValidationDialog })));
 
 export default function App() {
@@ -115,6 +116,7 @@ export default function App() {
           {dialog === 'sparklines' && <SparklineDialog />}
           {dialog === 'whatif' && <WhatIfDialog />}
           {dialog === 'slicers' && <SlicersDialog />}
+          {dialog === 'datamodel' && <DataModelDialog />}
         </Suspense>
       )}
       <Overlays />

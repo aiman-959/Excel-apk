@@ -1,7 +1,7 @@
 /** Bar / line / pie charts from a cell range, rendered with ECharts (tree-shaken), updating live. */
 import { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts/core';
-import { BarChart, LineChart, PieChart } from 'echarts/charts';
+import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, TooltipComponent, TitleComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { Trash2 } from 'lucide-react';
@@ -11,11 +11,11 @@ import { doc } from '../state/doc';
 import { activeRect } from '../ui/actions';
 import { parseRange, rectToA1 } from '../io/a1';
 import type { ChartDef } from '../io/types';
-import { toSeries } from './chartData';
+import { chartOption, CHART_TYPES } from './chartOption';
 import { getTier } from '../device/tier';
 import { useDoc } from '../ui/hooks';
 
-echarts.use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent, TitleComponent, CanvasRenderer]);
+echarts.use([BarChart, LineChart, PieChart, ScatterChart, GridComponent, LegendComponent, TooltipComponent, TitleComponent, CanvasRenderer]);
 
 function readValues(def: ChartDef): unknown[][] {
   const ws = doc.wb.getSheetBySheetId(def.sheetId);
@@ -24,23 +24,6 @@ function readValues(def: ChartDef): unknown[][] {
   return ws.getRange(r.r0, r.c0, r.r1 - r.r0 + 1, r.c1 - r.c0 + 1).getValues() as unknown[][];
 }
 
-export function chartOption(def: ChartDef, values: unknown[][], dark: boolean): echarts.EChartsCoreOption {
-  const { categories, series } = toSeries(values);
-  const text = dark ? '#ececf3' : '#1c1c28';
-  const palette = ['#15803d', '#fbbf24', '#22c55e', '#1e88c7', '#e8772e', '#14532d', '#b42318', '#7c3aed'];
-  const base = { color: palette, textStyle: { color: text }, title: { text: def.title, left: 'center', textStyle: { fontSize: 14, color: text } }, tooltip: { trigger: def.type === 'pie' ? 'item' : 'axis' }, legend: { bottom: 0, textStyle: { color: text } }, animation: getTier().animations !== 'reduced' };
-  if (def.type === 'pie') {
-    const s = series[0] ?? { name: '', data: [] };
-    return { ...base, series: [{ type: 'pie', name: s.name, radius: ['30%', '62%'], data: categories.map((c, i) => ({ name: c, value: s.data[i] })) }] };
-  }
-  return {
-    ...base,
-    grid: { left: 44, right: 16, top: 40, bottom: 48 },
-    xAxis: { type: 'category', data: categories, axisLabel: { color: text } },
-    yAxis: { type: 'value', axisLabel: { color: text } },
-    series: series.map((s) => ({ type: def.type, name: s.name, data: s.data, smooth: def.type === 'line' })),
-  };
-}
 
 function ChartCard({ def, onDelete }: { def: ChartDef; onDelete: () => void }) {
   const box = useRef<HTMLDivElement>(null);
@@ -48,7 +31,7 @@ function ChartCard({ def, onDelete }: { def: ChartDef; onDelete: () => void }) {
   useEffect(() => {
     const chart = echarts.init(box.current!, undefined, { renderer: 'canvas' });
     let t: ReturnType<typeof setTimeout>;
-    const draw = () => chart.setOption(chartOption(def, readValues(def), dark), true);
+    const draw = () => chart.setOption(chartOption(def, readValues(def), { dark, animate: getTier().animations !== 'reduced' }) as never, true);
     const schedule = () => {
       clearTimeout(t);
       t = setTimeout(draw, 250); // debounce: many edits -> one redraw
@@ -91,7 +74,7 @@ export default function ChartPanel() {
   const add = () =>
     guard(() => {
       parseRange(range);
-      const def: ChartDef = { id: 'ch' + Date.now().toString(36), title: title || `${type[0].toUpperCase()}${type.slice(1)} chart`, type, sheetId: doc.wb.getActiveSheet().getSheetId(), range };
+      const def: ChartDef = { id: 'ch' + Date.now().toString(36), title: title || `${CHART_TYPES.find((c) => c.type === type)?.label ?? type} chart`, type, sheetId: doc.wb.getActiveSheet().getSheetId(), range };
       doc.updateMeta((m) => (m.charts = [def, ...(m.charts ?? [])]));
       setTitle('');
     });
@@ -109,9 +92,9 @@ export default function ChartPanel() {
       </div>
       <div className="row" style={{ marginBottom: 14 }}>
         <div className="chips" style={{ flex: 1 }}>
-          {(['bar', 'line', 'pie'] as const).map((t) => (
-            <button key={t} className={'chip' + (t === type ? ' on' : '')} onClick={() => setType(t)}>
-              {t === 'bar' ? 'Bar' : t === 'line' ? 'Line' : 'Pie'}
+          {CHART_TYPES.map(({ type: t, label }) => (
+            <button key={t} className={'chip' + (t === type ? ' on' : '')} data-testid={'chart-type-' + t} onClick={() => setType(t)}>
+              {label}
             </button>
           ))}
         </div>

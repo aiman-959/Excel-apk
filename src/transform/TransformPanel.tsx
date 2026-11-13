@@ -1,6 +1,6 @@
 /** Data transform panel (Power Query style): source -> recorded steps -> preview -> load to sheet; refreshable. */
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Trash2, FileUp, Table2, ArrowLeft, Upload } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, FileUp, Table2, ArrowLeft, Upload, Globe } from 'lucide-react';
 import { Dialog } from '../ui/Chrome';
 import { guard, ui } from '../ui/store';
 import { doc } from '../state/doc';
@@ -9,6 +9,7 @@ import { transformWorker } from './pool';
 import { gridFromValues, type Grid } from './engine';
 import { pickFile, rereadUri } from '../io/files';
 import { isNative } from '../device/native';
+import { gridFromUrl } from '../io/urlImport';
 import type { QueryDef, TransformStep } from '../io/types';
 import { getTier } from '../device/tier';
 import { useDoc } from '../ui/hooks';
@@ -18,6 +19,15 @@ const CACHE_LIMIT_ROWS = 50_000;
 async function sourceGrid(q: QueryDef): Promise<Grid> {
   const s = q.source;
   if (s.kind === 'sheet') return gridFromValues(readBlock(s.sheetId, s.range).values);
+  if (s.kind === 'url') {
+    try {
+      return await gridFromUrl(s.url, s.format);
+    } catch (e) {
+      if (!s.cached) throw e;
+      console.warn('download failed, using the last copy', e);
+      return s.cached as Grid;
+    }
+  }
   if (s.uri && isNative()) {
     try {
       return await transformWorker().callT('parseFile', [await rereadUri(s.uri), s.name], []);
@@ -231,7 +241,7 @@ function QueryEditor({ q, onBack }: { q: QueryDef; onBack: () => void }) {
         <button className="icon-btn" aria-label="Back" onClick={onBack}><ArrowLeft size={22} /></button>
         <input className="input" style={{ flex: 1 }} value={q.name} onChange={(e) => update((x) => (x.name = e.target.value))} />
       </div>
-      <p className="muted">Source: {q.source.kind === 'sheet' ? `${doc.wb.getSheetBySheetId(q.source.sheetId)?.getSheetName() ?? '?'}!${q.source.range ?? 'used range'}` : q.source.name}</p>
+      <p className="muted">Source: {q.source.kind === 'sheet' ? `${doc.wb.getSheetBySheetId(q.source.sheetId)?.getSheetName() ?? '?'}!${q.source.range ?? 'used range'}` : q.source.kind === 'url' ? q.source.url : q.source.name}</p>
       <h4>Applied steps</h4>
       {q.steps.length === 0 && <p className="muted">No steps yet.</p>}
       {q.steps.map((s, i) => (
@@ -268,6 +278,7 @@ export default function TransformPanel() {
   useDoc();
   const queries = doc.meta.queries ?? [];
   const [open, setOpen] = useState<string | null>(null);
+  const [urlText, setUrlText] = useState('');
   const current = useMemo(() => queries.find((q) => q.id === open) ?? null, [queries, open]);
   const add = (q: QueryDef) => {
     doc.updateMeta((m) => (m.queries = [...(m.queries ?? []), q]));
@@ -292,6 +303,15 @@ export default function TransformPanel() {
       });
       if (g.rows.length > CACHE_LIMIT_ROWS && !f.uri) ui.toast('Large file: refresh needs the original file');
     });
+  const fromUrl = () =>
+    guard(async () => {
+      const url = urlText.trim();
+      ui.progress(0, 1, 'Downloading');
+      const g = await gridFromUrl(url, 'auto');
+      const name = (url.split(/[?#]/)[0].split('/').filter(Boolean).pop() ?? 'web data').replace(/\.[^.]+$/, '').slice(0, 28) || 'web data';
+      add({ id: 'q' + Date.now().toString(36), name, source: { kind: 'url', url, format: 'auto', cached: g.rows.length <= CACHE_LIMIT_ROWS ? g : undefined }, steps: [] });
+      setUrlText('');
+    });
   return (
     <Dialog title="Transform data" onClose={() => ui.close()} testId="dlg-transform">
       {current ? (
@@ -303,11 +323,20 @@ export default function TransformPanel() {
             <button className="tool" data-testid="transform-from-sheet" onClick={fromSheet}><Table2 /> From selection</button>
             <button className="tool" onClick={fromFile}><FileUp /> Import CSV / xlsx</button>
           </div>
+          <div className="row" style={{ marginBottom: 16 }}>
+            <label className="field">
+              <span>Import from URL (CSV, JSON or xlsx; refreshable)</span>
+              <input className="input mono" data-testid="transform-url" inputMode="url" placeholder="https://example.com/data.csv" value={urlText} onChange={(e) => setUrlText(e.target.value)} />
+            </label>
+            <button className="primary" data-testid="transform-url-go" disabled={!urlText.trim()} onClick={fromUrl}>
+              <Globe size={16} style={{ verticalAlign: -3 }} /> Import
+            </button>
+          </div>
           {queries.map((q) => (
             <div className="list-item" key={q.id}>
               <button className="grow" style={{ border: 0, background: 'none', textAlign: 'left' }} onClick={() => setOpen(q.id)}>
                 <b>{q.name}</b>
-                <div className="muted">{q.steps.length} step(s) · {q.source.kind === 'file' ? q.source.name : 'sheet range'}</div>
+                <div className="muted">{q.steps.length} step(s) · {q.source.kind === 'file' ? q.source.name : q.source.kind === 'url' ? q.source.url : 'sheet range'}</div>
               </button>
               <button className="icon-btn" aria-label="Refresh" data-testid="transform-refresh" onClick={() => guard(async () => ui.toast(`Refreshed: ${await loadQuery(q)} rows`))}>
                 <RefreshCw size={20} />

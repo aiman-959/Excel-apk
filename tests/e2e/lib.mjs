@@ -16,7 +16,9 @@ export async function start(name, profile = 'phone') {
   let current = '';
   page.on('pageerror', (e) => errors.push(`[${current}] ${e.message}`));
   const results = [];
+  const only = process.env.ONLY ? new RegExp(process.env.ONLY, 'i') : null;
   const step = async (title, fn) => {
+    if (only && !only.test(title) && title !== 'no uncaught page errors') return;
     current = title;
     const t0 = Date.now();
     try {
@@ -25,7 +27,9 @@ export async function start(name, profile = 'phone') {
       console.log(`  ✔ ${title} (${Date.now() - t0} ms)`);
     } catch (e) {
       results.push(['FAIL', title]);
-      console.log(`  ✖ ${title}\n    ${e.stack?.split('\n').slice(0, 4).join('\n    ')}`);
+      const shot = path.join(tmp, `fail-${results.length}.png`);
+      await page.screenshot({ path: shot }).catch(() => {});
+      console.log(`  ✖ ${title}\n    ${e.stack?.split('\n').slice(0, 4).join('\n    ')}\n    screenshot: ${shot}`);
       await page.keyboard.press('Escape').catch(() => {});
     }
   };

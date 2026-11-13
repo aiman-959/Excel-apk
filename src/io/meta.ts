@@ -20,6 +20,9 @@ function mapSheetIds(meta: AppMeta, map: IdMap): AppMeta {
   m.sparklines?.forEach((s) => (s.sheetId = map(s.sheetId) ?? s.sheetId));
   m.scenarios?.forEach((s) => (s.sheetId = map(s.sheetId) ?? s.sheetId));
   m.dataTables?.forEach((s) => (s.sheetId = map(s.sheetId) ?? s.sheetId));
+  m.dataModel?.tables.forEach((t) => {
+    if (t.source.kind === 'sheet') t.source.sheetId = map(t.source.sheetId) ?? t.source.sheetId;
+  });
   m.slicers?.forEach((s) => {
     if (s.target.kind === 'table') s.target.sheetId = map(s.target.sheetId) ?? s.target.sheetId;
   });
