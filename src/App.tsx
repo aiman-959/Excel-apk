@@ -17,6 +17,9 @@ const PivotDialog = lazy(() => import('./pivot/PivotDialog'));
 const MacroPanel = lazy(() => import('./macros/MacroPanel'));
 const TransformPanel = lazy(() => import('./transform/TransformPanel'));
 const CommentsDialog = lazy(() => import('./review/ReviewDialogs').then((m) => ({ default: m.CommentsDialog })));
+const SparklineDialog = lazy(() => import('./features/AnalysisDialogs').then((m) => ({ default: m.SparklineDialog })));
+const WhatIfDialog = lazy(() => import('./features/AnalysisDialogs').then((m) => ({ default: m.WhatIfDialog })));
+const SlicersDialog = lazy(() => import('./features/AnalysisDialogs').then((m) => ({ default: m.SlicersDialog })));
 const ValidationDialog = lazy(() => import('./review/ReviewDialogs').then((m) => ({ default: m.ValidationDialog })));
 
 export default function App() {
@@ -109,6 +112,9 @@ export default function App() {
           {dialog === 'transform' && <TransformPanel />}
           {dialog === 'comments' && <CommentsDialog />}
           {dialog === 'validation' && <ValidationDialog />}
+          {dialog === 'sparklines' && <SparklineDialog />}
+          {dialog === 'whatif' && <WhatIfDialog />}
+          {dialog === 'slicers' && <SlicersDialog />}
         </Suspense>
       )}
       <Overlays />

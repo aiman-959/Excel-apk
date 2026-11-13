@@ -30,6 +30,42 @@ export interface AppMeta {
   pivots?: PivotDef[];
   /** threaded comments (Univer resource JSON), keyed by sheet id in memory and by sheet name in files */
   threads?: Record<string, unknown[]>;
+  sparklines?: SparklineDef[];
+  scenarios?: ScenarioDef[];
+  dataTables?: DataTableDef[];
+  slicers?: SlicerDef[];
+}
+export interface ScenarioDef {
+  id: string;
+  name: string;
+  sheetId: string;
+  cells: string[]; // changing cells, e.g. ["B1", "B2"]
+  values: Array<string | number | boolean | null>;
+  comment?: string;
+}
+/** Excel-style what-if data table: results are written as values and can be refreshed. */
+export interface DataTableDef {
+  id: string;
+  sheetId: string;
+  range: string; // whole table incl. header row/column, e.g. "D1:F8"
+  rowInput?: string; // input cell fed from the table's top row
+  colInput?: string; // input cell fed from the table's left column
+}
+export interface SlicerDef {
+  id: string;
+  title: string;
+  column: string; // header name
+  target: { kind: 'table'; sheetId: string; range: string } | { kind: 'pivot'; pivotId: string };
+  selected: string[]; // empty = everything
+}
+export interface SparklineDef {
+  id: string;
+  sheetId: string;
+  cell: string; // where it is drawn, e.g. "F2"
+  source: string; // data range on the same sheet, e.g. "B2:E2"
+  type: 'line' | 'column' | 'winloss';
+  color: string;
+  negColor: string;
 }
 export interface ChartDef {
   id: string;
@@ -52,6 +88,8 @@ export interface PivotDef {
   value: string;
   agg: 'sum' | 'count' | 'mean' | 'min' | 'max';
   targetSheetName: string;
+  /** slicer selections: column -> allowed values (as text) */
+  filters?: Record<string, string[]>;
 }
 export type TransformStep =
   | { op: 'filter'; column: string; cmp: '=' | '!=' | '>' | '<' | '>=' | '<=' | 'contains' | 'empty' | 'notEmpty'; value?: string | number }

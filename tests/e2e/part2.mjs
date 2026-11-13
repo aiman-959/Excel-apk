@@ -128,4 +128,124 @@ await step('autosave and restore keep comments, notes and rules', async () => {
   assert.deepEqual(s, { comments: 1, note: 'Source: Q3 report', rules: 3 }, JSON.stringify(s));
 });
 
+// ---------------------------------------------------------------- sparklines
+await step('sparklines: one per row, drawn in the cells', async () => {
+  await fresh();
+  await ev(() => {
+    const ws = window.__doc.wb.getActiveSheet();
+    ws.getRange('A1:E4').setValues([['Item', 'Q1', 'Q2', 'Q3', 'Q4'], ['North', 3, 5, 4, 8], ['South', -2, 3, -1, 2], ['East', 1, 1, 6, 2]]);
+    return 0;
+  });
+  await select('B2:E4');
+  await tool('insert', 'tool-sparklines');
+  await page.fill('[data-testid=spark-loc]', 'F2:F4');
+  await page.click('[data-testid=spark-add]');
+  await page.click('[data-testid=spark-column]');
+  await page.fill('[data-testid=spark-loc]', 'G2:G4');
+  await page.click('[data-testid=spark-add]');
+  await page.keyboard.press('Escape');
+  const sp = await ev(() => window.__doc.meta.sparklines.map((x) => `${x.type}:${x.cell}<-${x.source}`));
+  assert.deepEqual(sp, ['line:F2<-B2:E2', 'line:F3<-B3:E3', 'line:F4<-B4:E4', 'column:G2<-B2:E2', 'column:G3<-B3:E3', 'column:G4<-B4:E4']);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: t.tmp + '/sparklines.png' });
+});
+
+// ---------------------------------------------------------------- what-if
+await step('goal seek: loan amount for a 500/month payment', async () => {
+  await ev(() => {
+    const ws = window.__doc.wb.getActiveSheet();
+    ws.getRange('A10:B12').setValues([['Rate', 0.06], ['Principal', 10000], ['Payment', '=PMT(B10/12,60,-B11)']]);
+    return 0;
+  });
+  await idle();
+  await select('B12');
+  await tool('data', 'tool-whatif');
+  await page.fill('[data-testid=gs-goal]', '500');
+  await page.fill('[data-testid=gs-changing]', 'B11');
+  await page.click('[data-testid=gs-run]');
+  await page.waitForSelector('[data-testid=gs-result]');
+  await page.click('[data-testid=gs-keep]');
+  await idle();
+  assert.ok(Math.abs((await val('B11')) - 25862.78) < 0.05, String(await val('B11')));
+  assert.ok(Math.abs((await val('B12')) - 500) < 1e-6);
+});
+
+await step('scenarios: add, show, summary sheet', async () => {
+  await tool('data', 'tool-whatif');
+  await page.click('[data-testid=whatif-scenarios]');
+  await page.fill('[data-testid=sc-name]', 'Low rate');
+  await page.fill('[data-testid=sc-cells]', 'B10:B11');
+  await page.fill('[data-testid=sc-values]', '0.03, 20000');
+  await page.click('[data-testid=sc-add]');
+  await page.fill('[data-testid=sc-name]', 'High rate');
+  await page.fill('[data-testid=sc-values]', '0.09, 20000');
+  await page.click('[data-testid=sc-add]');
+  await page.fill('[data-testid=sc-results]', 'B12');
+  await page.click('[data-testid=sc-summary]');
+  await page.waitForFunction(() => !!window.__doc.wb.getSheetByName('Scenario summary'));
+  await idle();
+  const v = await ev(() => window.__doc.wb.getSheetByName('Scenario summary').getRange('A1:D6').getValues());
+  assert.deepEqual(v[0], ['', 'Current', 'Low rate', 'High rate'], JSON.stringify(v));
+  assert.equal(v[2][2], 0.03);
+  const pay = v[5].slice(1).map((x) => Math.round(x * 100) / 100);
+  assert.deepEqual(pay, [500, 359.37, 415.17], JSON.stringify(v));
+  await ev(() => window.__doc.wb.setActiveSheet(window.__doc.wb.getSheets()[0]) && 0);
+});
+
+await step('data table: payment for several rates and terms', async () => {
+  await ev(() => {
+    const ws = window.__doc.wb.getActiveSheet();
+    ws.getRange('D10:G13').setValues([['=B12', 36, 60, 120], [0.03, null, null, null], [0.06, null, null, null], [0.09, null, null, null]]);
+    ws.getRange('B13').setValue(60);
+    ws.getRange('B12').setValue('=PMT(B10/12,B13,-B11)');
+    return 0;
+  });
+  await idle();
+  await select('D10:G13');
+  await tool('data', 'tool-whatif');
+  await page.click('[data-testid=whatif-table]');
+  await page.fill('[data-testid=dt-row]', 'B13');
+  await page.fill('[data-testid=dt-col]', 'B10');
+  await page.click('[data-testid=dt-run]');
+  await page.waitForFunction(() => window.__doc.meta.dataTables?.length === 1);
+  await page.keyboard.press('Escape');
+  await idle();
+  const v = await ev(() => window.__doc.wb.getActiveSheet().getRange('E11:G13').getValues());
+  const r = v.map((row) => row.map((x) => Math.round(x * 100) / 100));
+  assert.deepEqual(r[1], [786.8, 500, 287.13], JSON.stringify(r)); // 6% for 36/60/120 months on 25,862.78
+});
+
+await step('slicers: filter a table and a pivot', async () => {
+  await ev(() => {
+    const ws = window.__doc.wb.insertSheet('Sales');
+    window.__doc.wb.setActiveSheet(ws);
+    ws.getRange('A1:C6').setValues([['Region', 'Product', 'Units'], ['N', 'Apple', 10], ['S', 'Apple', 5], ['N', 'Pear', 7], ['S', 'Pear', 3], ['E', 'Plum', 4]]);
+    return 0;
+  });
+  await select('A1');
+  await tool('data', 'tool-slicers');
+  await page.selectOption('[data-testid=slicer-column]', 'Region');
+  await page.click('[data-testid=slicer-add]');
+  await page.click('[data-testid=slicer-item-N]');
+  await page.waitForTimeout(200);
+  assert.deepEqual(await ev(() => window.__doc.wb.getActiveSheet().getFilter().getFilteredOutRows()), [2, 4, 5]);
+  await page.keyboard.press('Escape');
+  // pivot + slicer on Product
+  await select('A1');
+  await tool('insert', 'tool-pivot');
+  await page.click('[data-testid=pivot-row-Region]');
+  await page.selectOption('[data-testid=pivot-value]', 'Units');
+  await page.click('[data-testid=pivot-create]');
+  await page.waitForFunction(() => !!window.__doc.wb.getSheetByName('Pivot 1'));
+  await tool('data', 'tool-slicers');
+  await page.click('[data-testid=slicer-kind-pivot]');
+  await page.selectOption('[data-testid=slicer-column]', 'Product');
+  await page.click('[data-testid=slicer-add]');
+  await page.click('[data-testid=slicer-item-Apple]');
+  await page.waitForTimeout(400);
+  await idle();
+  assert.deepEqual(await ev(() => window.__doc.wb.getSheetByName('Pivot 1').getRange('A1:B4').getValues()), [['Region', 'Sum of Units'], ['N', 10], ['S', 5], ['Grand total', 15]]);
+  await page.keyboard.press('Escape');
+});
+
 await t.finish();

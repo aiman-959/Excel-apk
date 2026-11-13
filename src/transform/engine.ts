@@ -137,9 +137,15 @@ export function runSteps(input: Grid, steps: TransformStep[], resolve: (id: stri
 }
 
 /** Pivot table: rows fields x column field, aggregating one value field. Returns a 2D block incl. headers + grand totals. */
-export function pivot(values: unknown[][], def: Pick<PivotDef, 'rows' | 'cols' | 'value' | 'agg'>): unknown[][] {
+export function pivot(values: unknown[][], def: Pick<PivotDef, 'rows' | 'cols' | 'value' | 'agg' | 'filters'>): unknown[][] {
   const g = gridFromValues(values);
-  const t = toTable(g);
+  let t = toTable(g);
+  // slicer selections: keep rows whose value (as text) is selected
+  for (const [col, allowed] of Object.entries(def.filters ?? {})) {
+    if (!allowed?.length || !g.columns.includes(col)) continue;
+    const set = new Set(allowed);
+    t = t.filter(aq.escape((d: Record<string, unknown>) => set.has(String(d[col] ?? '')))).reify();
+  }
   const agg = AGG[def.agg](def.value);
   const label = `${def.agg === 'count' ? 'Count' : def.agg[0].toUpperCase() + def.agg.slice(1)} of ${def.value}`;
   if (!def.cols.length) {

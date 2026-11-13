@@ -11,7 +11,7 @@ import { useDoc } from '../ui/hooks';
 
 export async function runPivot(def: PivotDef) {
   const { values } = readBlock(def.sourceSheetId, def.sourceRange);
-  const out = await transformWorker().call('pivot', values, { rows: def.rows, cols: def.cols, value: def.value, agg: def.agg });
+  const out = await transformWorker().call('pivot', values, { rows: def.rows, cols: def.cols, value: def.value, agg: def.agg, filters: def.filters });
   writeBlock(def.targetSheetName, out, { headerRows: def.cols.length ? 2 : 1 });
 }
 

@@ -232,6 +232,90 @@ export class FormulaEngine {
     });
   }
 
+  // ---- what-if analysis (inputs are changed temporarily and always restored)
+  private numberAt(addr: { sheet: number; row: number; col: number }): number {
+    const v = this.hf.getCellValue(addr);
+    return typeof v === 'number' ? v : typeof v === 'boolean' ? +v : NaN;
+  }
+
+  /**
+   * Goal Seek: find the value of `changing` that makes `target` equal `goal`.
+   * Secant steps with a bisection fallback once the root is bracketed.
+   */
+  goalSeek(sheetId: string, target: [number, number], goal: number, changing: [number, number], maxIter = 200, tol = 1e-9) {
+    const sheet = this.sheet(sheetId);
+    const tAddr = { sheet, row: target[0], col: target[1] };
+    const cAddr = { sheet, row: changing[0], col: changing[1] };
+    if (!this.hf.doesCellHaveFormula(tAddr)) throw new Error('The target cell must contain a formula');
+    if (this.hf.doesCellHaveFormula(cAddr)) throw new Error('The changing cell must contain a value, not a formula');
+    const original = this.hf.getCellSerialized(cAddr);
+    const f = (x: number) => {
+      this.hf.setCellContents(cAddr, [[x]]);
+      return this.numberAt(tAddr) - goal;
+    };
+    const start = typeof this.hf.getCellValue(cAddr) === 'number' ? (this.hf.getCellValue(cAddr) as number) : 0;
+    let x0 = start;
+    let x1 = start === 0 ? 1 : start * 1.1;
+    let f0 = f(x0);
+    let f1 = f(x1);
+    let lo: number | null = null;
+    let hi: number | null = null;
+    let best = Math.abs(f0) < Math.abs(f1) ? x0 : x1;
+    let bestErr = Math.min(Math.abs(f0), Math.abs(f1));
+    let i = 0;
+    try {
+      for (; i < maxIter && bestErr > tol * Math.max(1, Math.abs(goal)); i++) {
+        if (isNaN(f0) || isNaN(f1)) break;
+        if (f0 * f1 < 0) [lo, hi] = f0 < 0 ? [x0, x1] : [x1, x0];
+        let x2 = f1 !== f0 ? x1 - (f1 * (x1 - x0)) / (f1 - f0) : x1 + 1;
+        if (!isFinite(x2) || (lo !== null && hi !== null && (x2 <= Math.min(lo, hi) || x2 >= Math.max(lo, hi)))) {
+          if (lo !== null && hi !== null) x2 = (lo + hi) / 2;
+          else x2 = x1 * 2 || 1;
+        }
+        const f2 = f(x2);
+        if (Math.abs(f2) < bestErr) {
+          bestErr = Math.abs(f2);
+          best = x2;
+        }
+        if (lo !== null && hi !== null) {
+          if (f2 < 0) lo = x2;
+          else hi = x2;
+        }
+        [x0, f0, x1, f1] = [x1, f1, x2, f2];
+      }
+    } finally {
+      this.hf.setCellContents(cAddr, [[original as RawCellContent]]);
+    }
+    return { value: best, achieved: bestErr <= 1e-6 * Math.max(1, Math.abs(goal)), error: bestErr, iterations: i };
+  }
+
+  /**
+   * Run several "what if" trials: set some cells, read others, then restore everything.
+   * Used by Data Tables and the Scenario summary.
+   */
+  whatIf(sheetId: string, trials: Array<Array<[number, number, Raw]>>, reads: Array<[number, number]>): Array<Array<CellOut['v']>> {
+    const sheet = this.sheet(sheetId);
+    const touched = new Map<string, RawCellContent>();
+    for (const t of trials) for (const [r, c] of t) if (!touched.has(`${r},${c}`)) touched.set(`${r},${c}`, this.hf.getCellSerialized({ sheet, row: r, col: c }) as RawCellContent);
+    const out: Array<Array<CellOut['v']>> = [];
+    try {
+      for (const t of trials) {
+        this.hf.batch(() => {
+          for (const [r, c, v] of t) this.hf.setCellContents({ sheet, row: r, col: c }, [[norm(v) as RawCellContent]]);
+        });
+        out.push(reads.map(([r, c]) => this.cellOut(sheet, r, c).v));
+      }
+    } finally {
+      this.hf.batch(() => {
+        for (const [k, v] of touched) {
+          const [r, c] = k.split(',').map(Number);
+          this.hf.setCellContents({ sheet, row: r, col: c }, [[v]]);
+        }
+      });
+    }
+    return out;
+  }
+
   /** Evaluate an ad-hoc formula (e.g. from a macro or the formula bar preview). */
   evaluate(sheetId: string, formula: string): CellOut['v'] {
     const v = this.hf.calculateFormula(normalizeFormula(formula), this.sheet(sheetId));

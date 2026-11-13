@@ -13,7 +13,7 @@ const api = {
     });
     return limit ? fromTable(toTable(out), limit) : out;
   },
-  pivot(values: unknown[][], def: Pick<PivotDef, 'rows' | 'cols' | 'value' | 'agg'>) {
+  pivot(values: unknown[][], def: Pick<PivotDef, 'rows' | 'cols' | 'value' | 'agg' | 'filters'>) {
     return pivot(values, def);
   },
   /** Import first sheet of a CSV/xlsx as a header+rows grid (values only). */

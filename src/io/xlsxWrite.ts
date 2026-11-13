@@ -125,7 +125,7 @@ export async function writeXlsx(
 
   const threads = Object.fromEntries(Object.entries(review.threads).filter(([, v]) => v?.length));
   const metaOut = opts.meta ? { ...opts.meta, threads: Object.keys(threads).length ? threads : undefined } : null;
-  if (metaOut && (metaOut.charts?.length || metaOut.macros?.length || metaOut.queries?.length || metaOut.pivots?.length || metaOut.threads)) {
+  if (metaOut && (metaOut.charts?.length || metaOut.macros?.length || metaOut.queries?.length || metaOut.pivots?.length || metaOut.threads || metaOut.sparklines?.length || metaOut.scenarios?.length || metaOut.dataTables?.length || metaOut.slicers?.length)) {
     const ms = wb.addWorksheet(META_SHEET, { state: 'veryHidden' });
     const idToName = (sid: string) => data.sheets[sid]?.name;
     writeMetaRows(metaOut, idToName).forEach((line, i) => (ms.getCell(i + 1, 1).value = line));

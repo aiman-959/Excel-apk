@@ -1,7 +1,7 @@
 import {
   Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, WrapText, Merge, Split, Square, Grid3x3, PanelTop, PanelBottom, SquareDashed,
   Hash, Highlighter, Eraser, Search, ArrowDownAZ, ArrowUpZA, Filter, FilterX, Snowflake, BarChart3, LineChart, PieChart, Table2, Sigma, FileSpreadsheet,
-  Code2, Workflow, Gauge, Rows3, Columns3, Trash2, Undo2, Redo2, ListX, Info, MessageSquare, ListChecks,
+  Code2, Workflow, Gauge, Rows3, Columns3, Trash2, Undo2, Redo2, ListX, Info, MessageSquare, ListChecks, Activity, Target, SlidersHorizontal, Network,
 } from 'lucide-react';
 import { Tool } from './Chrome';
 import { data, edit, fmt, sheets } from './actions';
@@ -106,6 +106,7 @@ export function ToolPanel({ tab }: { tab: ToolTab }) {
             <Tool icon={<Table2 />} label="Pivot table" testId="tool-pivot" onClick={() => ui.open('pivot')} />
             <Tool icon={<Sigma />} label="Function" onClick={() => ui.open('functions')} />
             <Tool icon={<MessageSquare />} label="Comment / note" testId="tool-comments" onClick={() => ui.open('comments')} />
+            <Tool icon={<Activity />} label="Sparklines" testId="tool-sparklines" onClick={() => ui.open('sparklines')} />
             <Tool icon={<FileSpreadsheet />} label="New sheet" onClick={run(sheets.add)} />
           </div>
         </div>
@@ -137,6 +138,9 @@ export function ToolPanel({ tab }: { tab: ToolTab }) {
             <div className="btn-grid">
               <Tool icon={<Table2 />} label="Pivot table" onClick={() => ui.open('pivot')} />
               <Tool icon={<Workflow />} label="Transform" testId="tool-transform" onClick={() => ui.open('transform')} />
+              <Tool icon={<Target />} label="What-if" testId="tool-whatif" onClick={() => ui.open('whatif')} />
+              <Tool icon={<SlidersHorizontal />} label="Slicers" testId="tool-slicers" onClick={() => ui.open('slicers')} />
+              <Tool icon={<Network />} label="Data model" testId="tool-datamodel" onClick={() => ui.open('datamodel')} />
             </div>
           </div>
         </>

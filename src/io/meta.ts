@@ -17,6 +17,12 @@ function mapSheetIds(meta: AppMeta, map: IdMap): AppMeta {
   const m = structuredClone(meta);
   m.charts?.forEach((c) => (c.sheetId = map(c.sheetId) ?? c.sheetId));
   m.pivots?.forEach((p) => (p.sourceSheetId = map(p.sourceSheetId) ?? p.sourceSheetId));
+  m.sparklines?.forEach((s) => (s.sheetId = map(s.sheetId) ?? s.sheetId));
+  m.scenarios?.forEach((s) => (s.sheetId = map(s.sheetId) ?? s.sheetId));
+  m.dataTables?.forEach((s) => (s.sheetId = map(s.sheetId) ?? s.sheetId));
+  m.slicers?.forEach((s) => {
+    if (s.target.kind === 'table') s.target.sheetId = map(s.target.sheetId) ?? s.target.sheetId;
+  });
   m.queries?.forEach((q) => {
     if (q.source.kind === 'sheet') q.source.sheetId = map(q.source.sheetId) ?? q.source.sheetId;
   });

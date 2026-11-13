@@ -51,3 +51,25 @@ describe('formula engine (HyperFormula)', () => {
     expect(ch2[0].cells[0].v).toBe(5);
   });
 });
+
+describe('what-if analysis', () => {
+  it('goal seek finds the input and restores the cell', () => {
+    // loan payment: =PMT(rate/12, 60, -principal) ; find principal for payment 500
+    const { e } = engine([[0.06, 10000, '=PMT(A1/12,60,-B1)']]);
+    const r = e.goalSeek('s1', [0, 2], 500, [0, 1]);
+    expect(r.achieved).toBe(true);
+    expect(r.value).toBeCloseTo(25862.78, 1);
+    expect(e.hf.getCellValue({ sheet: 0, row: 0, col: 1 })).toBe(10000); // restored
+  });
+  it('goal seek on a non-linear model', () => {
+    const { e } = engine([[1, '=A1^3-2*A1-5']]);
+    const r = e.goalSeek('s1', [0, 1], 0, [0, 0]);
+    expect(r.value).toBeCloseTo(2.0945515, 5);
+  });
+  it('what-if trials (data table)', () => {
+    const { e } = engine([[5, 2, '=A1*B1']]);
+    const out = e.whatIf('s1', [[[0, 0, 1]], [[0, 0, 2]], [[0, 0, 3], [0, 1, 10]]], [[0, 2]]);
+    expect(out).toEqual([[2], [4], [30]]);
+    expect(e.hf.getCellValue({ sheet: 0, row: 0, col: 2 })).toBe(10); // restored 5*2
+  });
+});

@@ -13,7 +13,11 @@ export type DialogId =
   | 'about'
   | 'functions'
   | 'comments'
-  | 'validation';
+  | 'validation'
+  | 'sparklines'
+  | 'whatif'
+  | 'slicers'
+  | 'datamodel';
 export type ToolTab = 'edit' | 'format' | 'insert' | 'data' | 'tools';
 
 interface UiState {

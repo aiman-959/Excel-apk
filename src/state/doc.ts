@@ -5,6 +5,7 @@
 import type { IWorkbookData, ICellData, IWorksheetData } from '@univerjs/core';
 import { ICommandService, IResourceManagerService, UniverInstanceType } from '@univerjs/core';
 import { RES_THREADS } from '../io/review';
+import { setSparklines } from '../features/sparklines';
 import type { FWorkbook } from '@univerjs/sheets/facade';
 import { FormulaDataModel } from '@univerjs/engine-formula';
 import { SheetSkeletonService } from '@univerjs/sheets';
@@ -77,6 +78,7 @@ class Doc {
   private autosaveTimer?: ReturnType<typeof setTimeout>;
   private loading = false;
   private saver = new AutosaveTracker();
+  private repaintSparklines: () => void = () => {};
   private saving: Promise<void> | null = null;
 
   get api() {
@@ -108,6 +110,15 @@ class Doc {
   init(container: HTMLElement, mobile: boolean) {
     this.h = createUniverApp(container, { mobile });
     this.bridge = new FormulaBridge(this.h.api, getTier().chunkRows);
+    // sparklines read their source cells while drawing: repaint when values change elsewhere
+    let rt: ReturnType<typeof setTimeout> | undefined;
+    const repaint = () => {
+      if (!this.meta.sparklines?.length) return;
+      clearTimeout(rt);
+      rt = setTimeout(() => this.syncMetaRenderers(), 60);
+    };
+    this.bridge.onRecalc(repaint);
+    this.repaintSparklines = repaint;
     const cmd = this.injector<ICommandService>(ICommandService);
     cmd.onCommandExecuted((info, options) => {
       if (this.loading) return;
@@ -123,6 +134,7 @@ class Doc {
       if (info.type === 2 /* MUTATION */ && /^sheet\.mutation\./.test(info.id) && !/auto-height/.test(info.id)) {
         const p = info.params as { subUnitId?: string; cellValue?: Record<string, unknown>; sheet?: { id?: string }; from?: { subUnitId?: string }; to?: { subUnitId?: string } } | undefined;
         // computed formula results are written too, so the saved session shows them on restore
+        if (info.id === 'sheet.mutation.set-range-values') this.repaintSparklines();
         if (info.id === 'sheet.mutation.set-range-values' && p?.subUnitId && p.cellValue) this.saver.markCells(p.subUnitId, Object.keys(p.cellValue).map(Number));
         else if (CELL_MOVES.test(info.id)) {
           // these move or create cells: rewrite the affected sheets' cell chunks
@@ -242,6 +254,7 @@ class Doc {
       sheets: { sheet1: { id: 'sheet1', name: 'Sheet1', rowCount: 1000, columnCount: 26, defaultColumnWidth: 88, defaultRowHeight: 24 } as IWorksheetData },
     });
     this.meta = emptyMeta();
+    setSparklines([]);
     await this.bridge.attach(fwb);
     this.loading = false;
     this.emit({ file: { name, format: 'xlsx', vba: null }, dirty: false, savedAt: null });
@@ -284,6 +297,7 @@ class Doc {
     const resources = (res.resources ?? []).map((r) => (r.name === RES_THREADS ? { ...r, data: withUnitId(r.data, unitId) } : r));
     const fwb = this.h.api.createWorkbook({ id: unitId, name: file.name, styles: res.styles, sheetOrder: order, sheets, resources } as Partial<IWorkbookData>);
     this.meta = { ...emptyMeta(), ...(res.meta ?? {}) };
+    setSparklines(this.meta.sparklines ?? []);
     this.applyCf(res.cf);
     await this.bridge.attach(fwb, ui.progress);
     this.loading = false;
@@ -416,6 +430,7 @@ class Doc {
     this.disposeCurrent();
     const fwb = this.h.api.createWorkbook(s.data);
     this.meta = { ...emptyMeta(), ...extra.meta };
+    setSparklines(this.meta.sparklines ?? []);
     // the saved session carries Univer's plugin resources (conditional formats, notes, comments,
     // validation, filters); only very old sessions need the separate CF list
     if (!s.data.resources?.length) this.applyCf(extra.cf ?? []);
@@ -432,8 +447,19 @@ class Doc {
     return rm.getResources(this.wb.getId(), UniverInstanceType.UNIVER_SHEET) as Array<{ name: string; data: string }>;
   }
 
+  /** Push metadata that affects rendering (sparklines) to the renderers. */
+  syncMetaRenderers() {
+    setSparklines(this.meta.sparklines ?? []);
+    try {
+      this.wb.getActiveSheet().refreshCanvas();
+    } catch {
+      /* no workbook yet */
+    }
+  }
+
   updateMeta(fn: (m: AppMeta) => void) {
     fn(this.meta);
+    this.syncMetaRenderers();
     this.markDirty();
     this.emit({});
   }

@@ -60,3 +60,11 @@ describe('pivot table', () => {
     ]);
   });
 });
+
+describe('pivot slicer filters', () => {
+  it('only aggregates selected values', () => {
+    expect(pivot(sales, { rows: ['Region'], cols: [], value: 'Units', agg: 'sum', filters: { Product: ['Apple'] } })).toEqual([
+      ['Region', 'Sum of Units'], ['North', 12], ['South', 5], ['Grand total', 17],
+    ]);
+  });
+});

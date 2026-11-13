@@ -152,6 +152,13 @@ export class FormulaBridge {
     await this.queue;
   }
 
+  goalSeek(sheetId: string, target: [number, number], goal: number, changing: [number, number]) {
+    return this.enqueue(() => this.rpc.call('goalSeek', sheetId, target, goal, changing));
+  }
+  whatIf(sheetId: string, trials: Array<Array<[number, number, Raw]>>, reads: Array<[number, number]>) {
+    return this.enqueue(() => this.rpc.call('whatIf', sheetId, trials as never, reads as never));
+  }
+
   evaluate(sheetId: string, formula: string) {
     return this.enqueue(() => this.rpc.call('evaluate', sheetId, formula));
   }
