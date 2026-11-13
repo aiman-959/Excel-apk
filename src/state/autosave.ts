@@ -35,22 +35,29 @@ export class AutosaveTracker {
   markSheet(sheetId: string) {
     this.dirty.set(sheetId, 'all');
   }
+  /** Something outside the cell chunks changed (styles, notes, rules): only the header needs saving. */
+  touch() {
+    this.headerDirty = true;
+  }
+  private headerDirty = false;
   markAll(sheetIds: string[]) {
     sheetIds.forEach((s) => this.markSheet(s));
   }
   get pending() {
-    return this.dirty.size > 0;
+    return this.dirty.size > 0 || this.headerDirty;
   }
 
-  async save(wb: Workbook, extra: unknown) {
+  async save(wb: Workbook, extra: unknown, resources: Array<{ name: string; data: string }> = []) {
     const work = this.dirty;
     this.dirty = new Map();
+    this.headerDirty = false;
     const t0 = performance.now();
     let written = 0;
     try {
       const snap = wb.getSnapshot(); // live object, not a copy
       const header: SessionHeader = { version: 2, time: Date.now(), workbook: { ...snap, sheets: undefined } as never, sheets: {}, extra };
       header.workbook.styles = wb.getStyles().toJSON();
+      header.workbook.resources = resources as never;
       for (const ws of wb.getSheets()) {
         const id = ws.getSheetId();
         const { cellData: _cells, ...props } = ws.getConfig();

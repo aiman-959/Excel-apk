@@ -30,6 +30,7 @@ import {
 } from '@univerjs/sheets';
 import { FormulaDataModel } from '@univerjs/engine-formula';
 import { rpcClient, type RpcClient } from './rpc';
+import { RuleFormulaSupport } from './ruleFormulas';
 import type { FormulaWorkerApi } from './formula.worker';
 import type { Raw, SheetChanges } from './formulaCore';
 
@@ -83,7 +84,10 @@ export class FormulaBridge {
     });
     this.disposers.push(() => d.dispose());
     this.instances = injector.get<IUniverInstanceService>(IUniverInstanceService);
+    this.rules = new RuleFormulaSupport(api, (sheetId, formulas) => this.enqueue(() => this.rpc.call('evaluateMany', sheetId, formulas as never)));
   }
+  /** Data-validation / conditional-format rule formulas, evaluated by HyperFormula. */
+  rules: RuleFormulaSupport;
   private instances: IUniverInstanceService;
 
   /** Subscribe to "values recomputed" notifications (charts, pivot refresh...). */
@@ -137,11 +141,14 @@ export class FormulaBridge {
       const res = await this.rpc.call('resumeAll');
       this.apply(res);
     });
+    this.rules.markAll();
   }
 
   /** Wait until all queued recalculation has been applied. */
   async idle() {
     while (this.flushScheduled || this.resyncTimers.size) await new Promise((r) => setTimeout(r, 10));
+    await this.queue;
+    await this.rules.idle();
     await this.queue;
   }
 

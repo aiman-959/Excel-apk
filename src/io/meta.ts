@@ -20,6 +20,14 @@ function mapSheetIds(meta: AppMeta, map: IdMap): AppMeta {
   m.queries?.forEach((q) => {
     if (q.source.kind === 'sheet') q.source.sheetId = map(q.source.sheetId) ?? q.source.sheetId;
   });
+  if (m.threads) {
+    const t: Record<string, unknown[]> = {};
+    for (const [k, list] of Object.entries(m.threads)) {
+      const nk = map(k) ?? k;
+      t[nk] = (list as Array<Record<string, unknown>>).map((c) => ({ ...c, subUnitId: nk, children: (c.children as Array<Record<string, unknown>> | undefined)?.map((ch) => ({ ...ch, subUnitId: nk })) }));
+    }
+    m.threads = t;
+  }
   return m;
 }
 

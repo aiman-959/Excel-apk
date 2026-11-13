@@ -6,6 +6,7 @@ import { colToLetters, parseRange, rectToA1 } from './a1';
 import type { AppMeta, CfEntry, CfStyle } from './types';
 import { META_SHEET, writeMetaRows } from './meta';
 import { injectVba } from './vba';
+import { parseResources, dvToExcel, threadAsNote } from './review';
 
 const EXCEL_EPOCH = Date.UTC(1899, 11, 30);
 
@@ -22,6 +23,7 @@ export async function writeXlsx(
     if (!s) return null;
     return typeof s === 'string' ? (data.styles?.[s] ?? null) : (s as IStyleData);
   };
+  const review = parseResources(data.resources as never);
   let total = 0;
   for (const id of data.sheetOrder) total += Object.keys(data.sheets[id]?.cellData ?? {}).length;
   let done = 0;
@@ -77,6 +79,21 @@ export async function writeXlsx(
     }
     for (const m of sd.mergeData ?? []) ws.mergeCells(m.startRow + 1, m.startColumn + 1, m.endRow + 1, m.endColumn + 1);
 
+    // notes (native), comment threads (as notes for other apps), data validation (native)
+    const noted = new Set<string>();
+    for (const [r, cols] of Object.entries(review.notes[id] ?? {}))
+      for (const [c, n] of Object.entries(cols)) {
+        if (!n?.note) continue;
+        ws.getCell(+r + 1, +c + 1).note = n.note;
+        noted.add(`${r},${c}`);
+      }
+    for (const t of review.threads[id] ?? []) {
+      const at = parseRange(String((t as { ref?: string }).ref ?? 'A1'));
+      if (noted.has(`${at.r0},${at.c0}`)) continue;
+      ws.getCell(at.r0 + 1, at.c0 + 1).note = threadAsNote(t as never);
+    }
+    dvToExcel(ws, review.dv[id] ?? []);
+
     let prio = 1;
     for (const e of opts.cf.filter((x) => x.sheetId === id)) {
       const ref = e.ranges.join(' ');
@@ -106,10 +123,12 @@ export async function writeXlsx(
     }
   }
 
-  if (opts.meta && (opts.meta.charts?.length || opts.meta.macros?.length || opts.meta.queries?.length || opts.meta.pivots?.length)) {
+  const threads = Object.fromEntries(Object.entries(review.threads).filter(([, v]) => v?.length));
+  const metaOut = opts.meta ? { ...opts.meta, threads: Object.keys(threads).length ? threads : undefined } : null;
+  if (metaOut && (metaOut.charts?.length || metaOut.macros?.length || metaOut.queries?.length || metaOut.pivots?.length || metaOut.threads)) {
     const ms = wb.addWorksheet(META_SHEET, { state: 'veryHidden' });
     const idToName = (sid: string) => data.sheets[sid]?.name;
-    writeMetaRows(opts.meta, idToName).forEach((line, i) => (ms.getCell(i + 1, 1).value = line));
+    writeMetaRows(metaOut, idToName).forEach((line, i) => (ms.getCell(i + 1, 1).value = line));
   }
 
   const buf = new Uint8Array((await wb.xlsx.writeBuffer()) as ArrayBuffer);

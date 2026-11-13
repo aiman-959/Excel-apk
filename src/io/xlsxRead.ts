@@ -9,6 +9,7 @@ import { META_SHEET, LEGACY_META_SHEETS, readMetaRows } from './meta';
 
 const isMetaSheet = (name: string) => name === META_SHEET || LEGACY_META_SHEETS.includes(name);
 import { extractVba } from './vba';
+import { extractNotes, notesResource, dvFromExcel, RES_DV, RES_THREADS, type UResource } from './review';
 
 const EXCEL_EPOCH = Date.UTC(1899, 11, 30);
 export function dateToSerial(d: Date): number {
@@ -19,16 +20,18 @@ export interface ParsedXlsx {
   wb: ExcelJS.Workbook;
   meta: ParsedMeta;
   vba: ArrayBuffer | null;
+  notes: Map<string, Array<{ ref: string; text: string }>>;
 }
 
 export async function parseXlsx(buf: ArrayBuffer, name: string): Promise<ParsedXlsx> {
   const vba = extractVba(new Uint8Array(buf));
+  const notes = extractNotes(new Uint8Array(buf));
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
   const sheets = wb.worksheets
     .filter((ws) => !isMetaSheet(ws.name))
     .map((ws, i) => ({ id: 'sheet' + (i + 1), name: ws.name, rows: ws.actualRowCount ? ws.rowCount : 0, cols: ws.columnCount }));
-  return { wb, vba, meta: { sheets, hasVba: !!vba, format: vba || /\.xlsm$/i.test(name) ? 'xlsm' : 'xlsx' } };
+  return { wb, vba, notes, meta: { sheets, hasVba: !!vba, format: vba || /\.xlsm$/i.test(name) ? 'xlsm' : 'xlsx' } };
 }
 
 function cellValueToUniver(v: XCellValue, cell: ExcelJS.Cell): Pick<ICellData, 'v' | 't' | 'f'> | null {
@@ -106,6 +109,17 @@ export function* streamXlsx(p: ParsedXlsx, chunkRows: number): Generator<LoadChu
       }
     }
   }
+  // notes + data validation -> Univer resources (loaded natively by createWorkbook)
+  const resources: UResource[] = [];
+  const notesRes = notesResource(xsheets.map((ws, i) => ({ sheetId: order[i], notes: p.notes.get(ws.name) ?? [] })));
+  if (notesRes) resources.push(notesRes);
+  const dv: Record<string, unknown[]> = {};
+  xsheets.forEach((ws, i) => {
+    const rules = dvFromExcel(ws, order[i]);
+    if (rules.length) dv[order[i]] = rules;
+  });
+  if (Object.keys(dv).length) resources.push({ name: RES_DV, data: JSON.stringify(dv) });
+
   let meta: AppMeta | null = null;
   const metaWs = p.wb.worksheets.find((ws) => isMetaSheet(ws.name));
   if (metaWs) {
@@ -113,7 +127,8 @@ export function* streamXlsx(p: ParsedXlsx, chunkRows: number): Generator<LoadChu
     metaWs.eachRow((row) => lines.push(String(row.getCell(1).value ?? '')));
     meta = readMetaRows(lines, (name) => order[p.meta.sheets.findIndex((s) => s.name === name)]);
   }
-  return { styles: styles.styles, sheetOrder: order, cf, meta, vba: p.vba, name: '' };
+  if (meta?.threads && Object.keys(meta.threads).length) resources.push({ name: RES_THREADS, data: JSON.stringify(meta.threads) });
+  return { styles: styles.styles, sheetOrder: order, cf, meta, vba: p.vba, name: '', resources };
 }
 
 function sheetProps(ws: XWorksheet, id: string, styles: StyleTable): Omit<IWorksheetData, 'cellData'> {

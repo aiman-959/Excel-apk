@@ -215,6 +215,23 @@ export class FormulaEngine {
     return this.collect(this.hf.setCellContents({ sheet: this.sheet(sheetId), row, col }, rows as RawCellContent[][]));
   }
 
+  /**
+   * Evaluate many ad-hoc formulas in one go (data-validation / conditional-format rule formulas).
+   * Array results (e.g. "=$A$1:$A$9" for list validation) come back as 2D arrays.
+   */
+  evaluateMany(sheetId: string, formulas: string[]): Array<CellOut['v'] | Array<Array<CellOut['v']>>> {
+    const id = this.sheet(sheetId);
+    return formulas.map((f) => {
+      try {
+        const v = this.hf.calculateFormula(normalizeFormula(f), id) as unknown;
+        if (Array.isArray(v)) return (v as unknown[][]).map((row) => row.map((x) => this.plain(x)));
+        return this.plain(v);
+      } catch {
+        return '#VALUE!';
+      }
+    });
+  }
+
   /** Evaluate an ad-hoc formula (e.g. from a macro or the formula bar preview). */
   evaluate(sheetId: string, formula: string): CellOut['v'] {
     const v = this.hf.calculateFormula(normalizeFormula(formula), this.sheet(sheetId));

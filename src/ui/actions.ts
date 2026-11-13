@@ -208,3 +208,35 @@ export function commitInput(text: string, target?: FRange) {
     if (p.pattern && !cell?.s) r.setNumberFormat(p.pattern);
   }
 }
+
+type DvRule = { showErrorMessage?: boolean; errorStyle?: number; error?: string; errorTitle?: string };
+type DvCell = FRange & { getDataValidation(): { rule: DvRule } | null; getDataValidationErrorAsync(): Promise<unknown[]> };
+
+/**
+ * Commit from the formula bar, honouring data-validation error alerts:
+ * Stop rejects the value, Warning asks, Information just tells.
+ */
+export async function commitValidated(text: string) {
+  const r = (doc.wb.getActiveSheet().getActiveCell() ?? activeRange()) as DvCell;
+  const rule = r.getDataValidation?.()?.rule;
+  const before = r.getFormula() || (r.getCellData()?.v ?? null);
+  commitInput(text, r);
+  if (!rule || rule.showErrorMessage === false || text === '') return true;
+  await doc.bridge.idle();
+  const errors = await r.getDataValidationErrorAsync();
+  if (!errors?.length) return true;
+  const msg = `${rule.errorTitle || 'Invalid value'}\n${rule.error || 'This value does not match the validation rule for this cell.'}`;
+  const restore = () => (before === null || before === '' ? r.clearContent() : r.setValue(before as never));
+  if (rule.errorStyle === 0) {
+    ui.toast('ℹ ' + (rule.error || 'Value does not match the rule'));
+    return true;
+  }
+  if (rule.errorStyle === 2) {
+    if (await ui.confirm(msg + '\n\nKeep this value anyway?')) return true;
+    restore();
+    return false;
+  }
+  restore();
+  await ui.alert(msg);
+  return false;
+}

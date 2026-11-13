@@ -16,6 +16,8 @@ const ChartPanel = lazy(() => import('./charts/ChartPanel'));
 const PivotDialog = lazy(() => import('./pivot/PivotDialog'));
 const MacroPanel = lazy(() => import('./macros/MacroPanel'));
 const TransformPanel = lazy(() => import('./transform/TransformPanel'));
+const CommentsDialog = lazy(() => import('./review/ReviewDialogs').then((m) => ({ default: m.CommentsDialog })));
+const ValidationDialog = lazy(() => import('./review/ReviewDialogs').then((m) => ({ default: m.ValidationDialog })));
 
 export default function App() {
   const host = useRef<HTMLDivElement>(null);
@@ -105,6 +107,8 @@ export default function App() {
           {dialog === 'pivot' && <PivotDialog />}
           {dialog === 'macros' && <MacroPanel />}
           {dialog === 'transform' && <TransformPanel />}
+          {dialog === 'comments' && <CommentsDialog />}
+          {dialog === 'validation' && <ValidationDialog />}
         </Suspense>
       )}
       <Overlays />

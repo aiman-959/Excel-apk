@@ -11,7 +11,9 @@ export type DialogId =
   | 'find'
   | 'numfmt'
   | 'about'
-  | 'functions';
+  | 'functions'
+  | 'comments'
+  | 'validation';
 export type ToolTab = 'edit' | 'format' | 'insert' | 'data' | 'tools';
 
 interface UiState {
@@ -20,7 +22,7 @@ interface UiState {
   tab: ToolTab | null; // phone: bottom sheet open for tab; tablet: side panel tab
   toast: { text: string; id: number } | null;
   progress: { done: number; total: number; label: string } | null;
-  confirm: { text: string; resolve: (ok: boolean) => void } | null;
+  confirm: { text: string; resolve: (ok: boolean) => void; okOnly?: boolean } | null;
   theme: 'light' | 'dark';
 }
 
@@ -56,6 +58,21 @@ export const ui = {
   },
   endProgress() {
     set({ progress: null });
+  },
+  /** Message with a single OK button. */
+  alert(text: string): Promise<void> {
+    return new Promise((resolve) =>
+      set({
+        confirm: {
+          text,
+          okOnly: true,
+          resolve: () => {
+            set({ confirm: null });
+            resolve();
+          },
+        },
+      }),
+    );
   },
   confirm(text: string): Promise<boolean> {
     return new Promise((resolve) =>

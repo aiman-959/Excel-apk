@@ -1,7 +1,7 @@
 import {
   Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, WrapText, Merge, Split, Square, Grid3x3, PanelTop, PanelBottom, SquareDashed,
   Hash, Highlighter, Eraser, Search, ArrowDownAZ, ArrowUpZA, Filter, FilterX, Snowflake, BarChart3, LineChart, PieChart, Table2, Sigma, FileSpreadsheet,
-  Code2, Workflow, Gauge, Rows3, Columns3, Trash2, Undo2, Redo2, ListX, Info,
+  Code2, Workflow, Gauge, Rows3, Columns3, Trash2, Undo2, Redo2, ListX, Info, MessageSquare, ListChecks,
 } from 'lucide-react';
 import { Tool } from './Chrome';
 import { data, edit, fmt, sheets } from './actions';
@@ -105,6 +105,7 @@ export function ToolPanel({ tab }: { tab: ToolTab }) {
             <Tool icon={<PieChart />} label="Pie chart" onClick={() => ui.open('chart', 'pie')} />
             <Tool icon={<Table2 />} label="Pivot table" testId="tool-pivot" onClick={() => ui.open('pivot')} />
             <Tool icon={<Sigma />} label="Function" onClick={() => ui.open('functions')} />
+            <Tool icon={<MessageSquare />} label="Comment / note" testId="tool-comments" onClick={() => ui.open('comments')} />
             <Tool icon={<FileSpreadsheet />} label="New sheet" onClick={run(sheets.add)} />
           </div>
         </div>
@@ -119,6 +120,7 @@ export function ToolPanel({ tab }: { tab: ToolTab }) {
               <Tool icon={<ArrowUpZA />} label="Sort Z→A" onClick={run(() => data.sort(false))} />
               <Tool icon={<Filter />} label="Filter on/off" testId="tool-filter" onClick={run(() => ui.toast(data.toggleFilter() ? 'Filter on — tap a header arrow' : 'Filter removed'))} />
               <Tool icon={<FilterX />} label="Clear filters" onClick={run(data.clearFilters)} />
+              <Tool icon={<ListChecks />} label="Validation" testId="tool-validation" onClick={() => ui.open('validation')} />
             </div>
           </div>
           <div className="group">

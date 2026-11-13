@@ -219,14 +219,16 @@ export function Overlays() {
         </div>
       )}
       {confirm && (
-        <Dialog title="Please confirm" onClose={() => confirm.resolve(false)}>
-          <p>{confirm.text}</p>
+        <Dialog title={confirm.okOnly ? 'Petak' : 'Please confirm'} onClose={() => confirm.resolve(false)}>
+          <p style={{ whiteSpace: 'pre-line' }} data-testid="confirm-text">{confirm.text}</p>
           <div className="row" style={{ justifyContent: 'flex-end' }}>
-            <button className="secondary" onClick={() => confirm.resolve(false)}>
-              Cancel
-            </button>
+            {!confirm.okOnly && (
+              <button className="secondary" data-testid="confirm-cancel" onClick={() => confirm.resolve(false)}>
+                Cancel
+              </button>
+            )}
             <button className="primary" data-testid="confirm-ok" onClick={() => confirm.resolve(true)}>
-              Continue
+              {confirm.okOnly ? 'OK' : 'Continue'}
             </button>
           </div>
         </Dialog>

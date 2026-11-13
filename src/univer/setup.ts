@@ -34,6 +34,15 @@ import {
   UniverSheetsConditionalFormattingMobileUIPlugin,
 } from '@univerjs/sheets-conditional-formatting-ui';
 
+import { UniverThreadCommentUIPlugin, UniverThreadCommentMobileUIPlugin } from '@univerjs/thread-comment-ui';
+import { UniverSheetsThreadCommentPlugin } from '@univerjs/sheets-thread-comment';
+import { UniverSheetsThreadCommentUIPlugin, UniverSheetsThreadCommentMobileUIPlugin } from '@univerjs/sheets-thread-comment-ui';
+import { UniverSheetsNotePlugin } from '@univerjs/sheets-note';
+import { UniverSheetsNoteUIPlugin } from '@univerjs/sheets-note-ui';
+import { UniverDataValidationPlugin } from '@univerjs/data-validation';
+import { UniverSheetsDataValidationPlugin } from '@univerjs/sheets-data-validation';
+import { UniverSheetsDataValidationUIPlugin, UniverSheetsDataValidationMobileUIPlugin } from '@univerjs/sheets-data-validation-ui';
+
 import '@univerjs/sheets/facade';
 import '@univerjs/ui/facade';
 import '@univerjs/docs-ui/facade';
@@ -43,18 +52,27 @@ import '@univerjs/sheets-filter/facade';
 import '@univerjs/sheets-sort/facade';
 import '@univerjs/sheets-find-replace/facade';
 import '@univerjs/sheets-conditional-formatting/facade';
+import '@univerjs/sheets-thread-comment/facade';
+import '@univerjs/sheets-note/facade';
+import '@univerjs/sheets-data-validation/facade';
 
 import coreEn from '@univerjs/preset-sheets-core/locales/en-US';
 import filterEn from '@univerjs/preset-sheets-filter/locales/en-US';
 import sortEn from '@univerjs/preset-sheets-sort/locales/en-US';
 import findEn from '@univerjs/preset-sheets-find-replace/locales/en-US';
 import cfEn from '@univerjs/preset-sheets-conditional-formatting/locales/en-US';
+import commentEn from '@univerjs/preset-sheets-thread-comment/locales/en-US';
+import noteEn from '@univerjs/preset-sheets-note/locales/en-US';
+import dvEn from '@univerjs/preset-sheets-data-validation/locales/en-US';
 
 import '@univerjs/preset-sheets-core/lib/index.css';
 import '@univerjs/preset-sheets-filter/lib/index.css';
 import '@univerjs/preset-sheets-sort/lib/index.css';
 import '@univerjs/preset-sheets-find-replace/lib/index.css';
 import '@univerjs/preset-sheets-conditional-formatting/lib/index.css';
+import '@univerjs/preset-sheets-thread-comment/lib/index.css';
+import '@univerjs/preset-sheets-note/lib/index.css';
+import '@univerjs/preset-sheets-data-validation/lib/index.css';
 
 /** Univer's green theme, with the primary scale aligned to Petak's brand (#15803D primary, #14532D dark). */
 export const petakTheme = {
@@ -91,7 +109,7 @@ export function createUniverApp(container: HTMLElement, opts: { mobile?: boolean
   const univer = new Univer({
     theme: petakTheme,
     locale: LocaleType.EN_US,
-    locales: { [LocaleType.EN_US]: mergeLocales(coreEn, filterEn, sortEn, findEn, cfEn) },
+    locales: { [LocaleType.EN_US]: mergeLocales(coreEn, filterEn, sortEn, findEn, cfEn, commentEn, noteEn, dvEn) },
   });
 
   const uiConfig = {
@@ -126,6 +144,16 @@ export function createUniverApp(container: HTMLElement, opts: { mobile?: boolean
   univer.registerPlugin(
     mobile ? UniverSheetsConditionalFormattingMobileUIPlugin : UniverSheetsConditionalFormattingUIPlugin,
   );
+
+  // comments (threaded), notes and data validation
+  univer.registerPlugin(mobile ? UniverThreadCommentMobileUIPlugin : UniverThreadCommentUIPlugin);
+  univer.registerPlugin(UniverSheetsThreadCommentPlugin);
+  univer.registerPlugin(mobile ? UniverSheetsThreadCommentMobileUIPlugin : UniverSheetsThreadCommentUIPlugin);
+  univer.registerPlugin(UniverSheetsNotePlugin);
+  univer.registerPlugin(UniverSheetsNoteUIPlugin);
+  univer.registerPlugin(UniverDataValidationPlugin);
+  univer.registerPlugin(UniverSheetsDataValidationPlugin);
+  univer.registerPlugin(mobile ? UniverSheetsDataValidationMobileUIPlugin : UniverSheetsDataValidationUIPlugin, { showEditOnDropdown: true });
 
   const api = FUniver.newAPI(univer);
   return { univer, api, mobile };

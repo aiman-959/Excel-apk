@@ -3,7 +3,8 @@
  * worker and app metadata. UI components talk to this singleton.
  */
 import type { IWorkbookData, ICellData, IWorksheetData } from '@univerjs/core';
-import { ICommandService } from '@univerjs/core';
+import { ICommandService, IResourceManagerService, UniverInstanceType } from '@univerjs/core';
+import { RES_THREADS } from '../io/review';
 import type { FWorkbook } from '@univerjs/sheets/facade';
 import { FormulaDataModel } from '@univerjs/engine-formula';
 import { SheetSkeletonService } from '@univerjs/sheets';
@@ -40,6 +41,24 @@ export interface LoadUi {
 
 type Listener = () => void;
 const emptyMeta = (): AppMeta => ({ version: 1, charts: [], macros: [], queries: [], pivots: [] });
+
+/** Mutations that move or create cells (everything else leaves stored cell chunks valid). */
+const CELL_MOVES = /^sheet\.mutation\.(insert-row|remove-rows|insert-col|remove-col|move-rows|move-columns|move-range|reorder-range|insert-sheet|copy-worksheet-end)$/;
+
+/** Comment threads reference their workbook id; give them the id of the workbook being created. */
+function withUnitId(json: string, unitId: string): string {
+  try {
+    const d = JSON.parse(json) as Record<string, Array<Record<string, unknown>>>;
+    for (const list of Object.values(d))
+      for (const c of list) {
+        c.unitId = unitId;
+        (c.children as Array<Record<string, unknown>> | undefined)?.forEach((ch) => (ch.unitId = unitId));
+      }
+    return JSON.stringify(d);
+  } catch {
+    return json;
+  }
+}
 
 class Doc {
   h!: UniverHandle;
@@ -95,12 +114,20 @@ class Doc {
       const opt = options as { fromFormulaEngine?: boolean; onlyLocal?: boolean; autoGrow?: boolean } | undefined;
       if (opt?.autoGrow) return;
       if (info.id === 'sheet.operation.set-scroll' || info.id === 'sheet.operation.set-selections') this.scheduleGrow();
+      // comments, notes, validation rules and other plugin data: header-only autosave + "edited"
+      const pp = info.params as { unitId?: string } | undefined;
+      if (info.type === 2 && !/^sheet\.mutation\./.test(info.id) && !/^(formula|doc)\./.test(info.id) && pp?.unitId && pp.unitId === this.h.api.getActiveWorkbook()?.getId() && !opt?.fromFormulaEngine) {
+        this.markDirty();
+      }
       // only real workbook changes count (editor-internal doc mutations and auto row heights do not)
       if (info.type === 2 /* MUTATION */ && /^sheet\.mutation\./.test(info.id) && !/auto-height/.test(info.id)) {
-        const p = info.params as { subUnitId?: string; cellValue?: Record<string, unknown> } | undefined;
+        const p = info.params as { subUnitId?: string; cellValue?: Record<string, unknown>; sheet?: { id?: string }; from?: { subUnitId?: string }; to?: { subUnitId?: string } } | undefined;
         // computed formula results are written too, so the saved session shows them on restore
         if (info.id === 'sheet.mutation.set-range-values' && p?.subUnitId && p.cellValue) this.saver.markCells(p.subUnitId, Object.keys(p.cellValue).map(Number));
-        else if (p?.subUnitId) this.saver.markSheet(p.subUnitId);
+        else if (CELL_MOVES.test(info.id)) {
+          // these move or create cells: rewrite the affected sheets' cell chunks
+          for (const sid of [p?.subUnitId, p?.sheet?.id, p?.from?.subUnitId, p?.to?.subUnitId]) if (sid) this.saver.markSheet(sid);
+        } else this.saver.touch(); // formats, merges, notes...: only the session header changes
         if (!opt?.fromFormulaEngine) this.markDirty();
         else this.scheduleAutosave();
       }
@@ -253,7 +280,9 @@ class Doc {
     await new Promise((r) => setTimeout(r, 0));
     this.loading = true;
     this.disposeCurrent();
-    const fwb = this.h.api.createWorkbook({ id: 'wb' + Date.now().toString(36), name: file.name, styles: res.styles, sheetOrder: order, sheets } as Partial<IWorkbookData>);
+    const unitId = 'wb' + Date.now().toString(36);
+    const resources = (res.resources ?? []).map((r) => (r.name === RES_THREADS ? { ...r, data: withUnitId(r.data, unitId) } : r));
+    const fwb = this.h.api.createWorkbook({ id: unitId, name: file.name, styles: res.styles, sheetOrder: order, sheets, resources } as Partial<IWorkbookData>);
     this.meta = { ...emptyMeta(), ...(res.meta ?? {}) };
     this.applyCf(res.cf);
     await this.bridge.attach(fwb, ui.progress);
@@ -373,7 +402,7 @@ class Doc {
       dirty: this.snap.dirty,
     };
     this.saving = this.saver
-      .save(this.wb.getWorkbook(), extra)
+      .save(this.wb.getWorkbook(), extra, this.resources())
       .catch((e) => console.warn('autosave failed', e))
       .finally(() => (this.saving = null));
     return this.saving;
@@ -387,12 +416,20 @@ class Doc {
     this.disposeCurrent();
     const fwb = this.h.api.createWorkbook(s.data);
     this.meta = { ...emptyMeta(), ...extra.meta };
-    this.applyCf(extra.cf ?? []);
+    // the saved session carries Univer's plugin resources (conditional formats, notes, comments,
+    // validation, filters); only very old sessions need the separate CF list
+    if (!s.data.resources?.length) this.applyCf(extra.cf ?? []);
     await this.bridge.attach(fwb);
     this.loading = false;
     this.emit({ file: extra.file, dirty: extra.dirty, savedAt: s.time });
     this.refreshSheets();
     return true;
+  }
+
+  /** Univer plugin data (CF, notes, comments, validation, filters...) of the current workbook. */
+  resources(): Array<{ name: string; data: string }> {
+    const rm = this.injector<IResourceManagerService>(IResourceManagerService);
+    return rm.getResources(this.wb.getId(), UniverInstanceType.UNIVER_SHEET) as Array<{ name: string; data: string }>;
   }
 
   updateMeta(fn: (m: AppMeta) => void) {

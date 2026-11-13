@@ -14,6 +14,7 @@ const api = {
   setCells: (id: string, cells: never) => engine.setCells(id, cells),
   replaceSheet: (id: string, rows: never) => engine.replaceSheet(id, rows),
   evaluate: (id: string, f: string) => engine.evaluate(id, f),
+  evaluateMany: (id: string, f: string[]) => engine.evaluateMany(id, f),
   insertRows: (id: string, s: number, n: number) => engine.insertRows(id, s, n),
   removeRows: (id: string, s: number, n: number) => engine.removeRows(id, s, n),
   insertCols: (id: string, s: number, n: number) => engine.insertCols(id, s, n),

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { useSelection } from './hooks';
-import { commitInput } from './actions';
+import { commitValidated } from './actions';
+import { useInputMessage } from '../review/ReviewDialogs';
 import { doc } from '../state/doc';
 import { parseRange } from '../io/a1';
 import { guard } from './store';
@@ -53,9 +54,9 @@ export function FormulaBar() {
   };
 
   const commit = (move: 'down' | 'right' | null) => {
-    guard(() => {
-      commitInput(text);
+    guard(async () => {
       setEditing(false);
+      await commitValidated(text);
       if (move) {
         const ws = doc.wb.getActiveSheet();
         const cell = ws.getActiveCell();
@@ -88,8 +89,15 @@ export function FormulaBar() {
     });
   };
 
+  const hint = useInputMessage(sel.ref);
   return (
     <div className="fbar" data-testid="formula-bar">
+      {hint && !suggestions.length && (
+        <div className="input-hint" role="note" data-testid="input-hint">
+          {hint.title && <b>{hint.title}: </b>}
+          {hint.text}
+        </div>
+      )}
       <input
         className="ref"
         aria-label="Cell reference"

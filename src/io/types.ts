@@ -28,6 +28,8 @@ export interface AppMeta {
   macros?: MacroDef[];
   queries?: QueryDef[];
   pivots?: PivotDef[];
+  /** threaded comments (Univer resource JSON), keyed by sheet id in memory and by sheet name in files */
+  threads?: Record<string, unknown[]>;
 }
 export interface ChartDef {
   id: string;
@@ -88,4 +90,6 @@ export interface LoadResult {
   meta: AppMeta | null;
   vba: ArrayBuffer | null;
   name: string;
+  /** Univer plugin resources (notes, data validation, comment threads) ready for createWorkbook */
+  resources?: Array<{ name: string; data: string }>;
 }
