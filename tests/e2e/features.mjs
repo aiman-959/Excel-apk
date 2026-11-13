@@ -13,7 +13,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:5173/';
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-e2e-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'petak-e2e-'));
 const launch = { executablePath: process.env.CHROMIUM_PATH || undefined, args: process.env.CHROME_ARGS ? process.env.CHROME_ARGS.split(' ') : [] };
 const results = [];
 const step = async (name, fn) => {
@@ -111,7 +111,7 @@ const closeSheet = () => page.locator('.sheet-backdrop').first().click({ positio
 const { file, csv } = await makeFixture();
 await page.goto(BASE + '?fresh');
 await page.waitForFunction(() => window.__doc?.snapshot?.sheets?.length > 0, null, { timeout: 30000 });
-console.log('OpenCells e2e —', BASE);
+console.log('Petak e2e —', BASE);
 
 // ---------------------------------------------------------------- 1. open / edit / save
 await step('1a open .xlsm from storage (file picker)', async () => {

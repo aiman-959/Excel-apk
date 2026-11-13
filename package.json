@@ -1,7 +1,7 @@
 {
-  "name": "opencells",
+  "name": "petak",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,8 @@
     "licenses": "node scripts/gen-licenses.mjs",
     "android:sync": "npm run build && cap sync android",
     "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
-    "android:release": "npm run android:sync && cd android && ./gradlew assembleRelease"
+    "android:release": "npm run android:sync && cd android && ./gradlew assembleRelease",
+    "icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.2",
@@ -42,6 +43,7 @@
     "@univerjs/sheets-sort": "1.4.0",
     "@univerjs/sheets-sort-ui": "1.4.0",
     "@univerjs/sheets-ui": "1.4.0",
+    "@univerjs/themes": "^1.4.0",
     "@univerjs/ui": "1.4.0",
     "arquero": "^8.0.3",
     "echarts": "^6.1.0",
@@ -67,11 +69,11 @@
     "vite": "^8.3.6",
     "vitest": "^5.1.0"
   },
-  "description": "Open-source spreadsheet app for Android phones and tablets",
+  "description": "Petak \u2014 open-source spreadsheet for Android phones and tablets",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aiman-959/Excel-apk.git"
+    "url": "https://github.com/aiman-959/petak.git"
   },
   "engines": {
     "node": ">=20"

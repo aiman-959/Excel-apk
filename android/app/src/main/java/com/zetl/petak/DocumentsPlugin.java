@@ -1,4 +1,4 @@
-package org.opencells.app;
+package com.zetl.petak;
 
 import android.app.Activity;
 import android.content.ContentResolver;

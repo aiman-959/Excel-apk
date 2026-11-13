@@ -1,36 +1,54 @@
-/* OpenCells design tokens — original palette (indigo/violet accent), not modelled on any office suite. */
+/* Petak design tokens. Brand: primary #15803D, dark #14532D, accent gold #FBBF24.
+   Every text/background pair below is checked for WCAG AA by tests/unit/contrast.test.ts. */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/space-grotesk-latin-700-normal.woff2') format('woff2');
+}
 :root {
-  --accent: #5b5bd6;
-  --accent-strong: #4646c2;
-  --accent-soft: #ececfd;
+  --brand: #15803d;
+  --brand-dark: #14532d;
+  --gold: #fbbf24;
+  --on-gold: #14532d;
+  --on-brand-dark: #ffffff;
+  --accent: #15803d; /* primary actions, links, active tools */
+  --accent-strong: #14532d;
+  --accent-soft: #dcfce7;
   --on-accent: #ffffff;
-  --bg: #f6f6f9;
+  --bg: #f4f7f5;
   --surface: #ffffff;
-  --surface-2: #f0f0f5;
-  --border: #dcdce6;
-  --text: #1c1c28;
-  --text-2: #5d5d72;
-  --danger: #d6455b;
-  --ok: #2f9e6b;
-  --shadow: 0 8px 28px rgba(20, 20, 50, 0.16);
+  --surface-2: #eef3ef;
+  --border: #d5ded8;
+  --text: #14231a;
+  --text-2: #4a5a50;
+  --danger: #b42318;
+  --ok: #15803d;
+  --shadow: 0 8px 28px rgba(10, 40, 20, 0.16);
   --radius: 14px;
   --tap: 48px; /* minimum touch target */
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+  --font-brand: 'Space Grotesk', var(--font);
   color-scheme: light;
 }
 :root[data-theme='dark'] {
-  --accent: #8b8bff;
-  --accent-strong: #a5a5ff;
-  --accent-soft: #2a2a4a;
-  --on-accent: #0f0f1a;
-  --bg: #121218;
-  --surface: #1b1b24;
-  --surface-2: #24242f;
-  --border: #33333f;
-  --text: #ececf3;
-  --text-2: #a3a3b8;
+  --brand: #22c55e;
+  --brand-dark: #14532d;
+  --accent: #4ade80;
+  --accent-strong: #86efac;
+  --accent-soft: #163b24;
+  --on-accent: #052e16;
+  --bg: #0e1511;
+  --surface: #151e19;
+  --surface-2: #1d2922;
+  --border: #2c3a32;
+  --text: #e7efea;
+  --text-2: #a3b3a9;
+  --danger: #f97066;
+  --ok: #4ade80;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
@@ -54,11 +72,13 @@ input, select, textarea { font: inherit; color: var(--text); }
 .bottombar.placeholder { height: calc(59px + var(--safe-bottom)); }
 
 /* ---------- top bar */
-.topbar { height: 56px; display: flex; align-items: center; gap: 4px; padding: 0 6px; background: var(--surface); border-bottom: 1px solid var(--border); }
-.brand { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), #c05bd6); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 14px; flex: none; }
-.title { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 0 6px; }
-.title b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; }
-.title small { color: var(--text-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar { height: 56px; display: flex; align-items: center; gap: 2px; padding: 0 4px 0 10px; background: var(--brand-dark); color: var(--on-brand-dark); }
+.topbar .icon-btn:active, .topbar .icon-btn.on { background: rgba(255, 255, 255, 0.16); color: #ffffff; }
+.brand { width: 30px; height: 30px; flex: none; display: grid; place-items: center; }
+.title { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 0 8px; line-height: 1.15; }
+.wordmark { font-family: var(--font-brand); font-weight: 700; font-size: 19px; letter-spacing: -0.01em; }
+.title small { color: #d5e0d9; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .dot { background: var(--gold); }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; }
 
 .icon-btn { width: var(--tap); height: var(--tap); border: 0; background: transparent; border-radius: 12px; display: inline-grid; place-items: center; cursor: pointer; flex: none; }
@@ -142,14 +162,14 @@ table.preview th { background: var(--surface-2); position: sticky; top: 0; }
 .log { background: var(--surface-2); border-radius: 10px; padding: 10px; font-family: ui-monospace, monospace; font-size: 13px; max-height: 160px; overflow: auto; white-space: pre-wrap; }
 
 /* ---------- overlays */
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(150px + var(--safe-bottom)); background: #23232f; color: #fff; padding: 12px 18px; border-radius: 12px; z-index: 60; box-shadow: var(--shadow); max-width: 90vw; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(150px + var(--safe-bottom)); background: #14231a; color: #fff; padding: 12px 18px; border-radius: 12px; z-index: 60; box-shadow: var(--shadow); max-width: 90vw; }
 .progress { position: fixed; inset: 0; z-index: 70; background: rgba(10, 10, 25, 0.45); display: grid; place-items: center; }
 .progress .card { background: var(--surface); border-radius: 18px; padding: 22px; width: min(360px, 86vw); box-shadow: var(--shadow); }
 .bar { height: 8px; border-radius: 8px; background: var(--surface-2); overflow: hidden; margin: 12px 0 6px; }
 .bar > i { display: block; height: 100%; background: var(--accent); transition: width 0.15s; }
 .chart-card { border: 1px solid var(--border); border-radius: 14px; padding: 8px; margin-bottom: 12px; }
 .chart-box { width: 100%; height: 260px; }
-.splash { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); z-index: 80; color: var(--text-2); }
+.splash { position: fixed; inset: 0; display: grid; place-items: center; background: #14532d; z-index: 80; }
 
 /* Univer canvas fills its host; hide its own context menu chrome borders in dark mode */
 .grid-host .univer-workbench-container, .grid-host > div { height: 100%; }

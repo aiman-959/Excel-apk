@@ -8,6 +8,7 @@ import { NumFmtDialog, CfDialog, FindDialog, FunctionsDialog, AboutDialog } from
 import { useKeyboardOpen, useMedia } from './ui/hooks';
 import { ui, useUi } from './ui/store';
 import { prefs } from './state/storage';
+import { PetakLogo } from './ui/Logo';
 import { fileActions } from './ui/actions';
 
 // Heavy, rarely used panels are code-split and loaded on demand.
@@ -107,7 +108,11 @@ export default function App() {
         </Suspense>
       )}
       <Overlays />
-      {!ready && <div className="splash">Loading OpenCells…</div>}
+      {!ready && (
+        <div className="splash" role="status" aria-label="Loading Petak">
+          <PetakLogo size={112} />
+        </div>
+      )}
     </div>
   );
 }

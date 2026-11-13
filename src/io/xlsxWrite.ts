@@ -15,7 +15,7 @@ export async function writeXlsx(
   onProgress?: (done: number, total: number) => void,
 ): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'OpenCells';
+  wb.creator = 'Petak';
   wb.created = new Date();
   const styleCache = new Map<string, ReturnType<typeof univerStyleToX>>();
   const resolveStyle = (s: ICellData['s']): IStyleData | null => {

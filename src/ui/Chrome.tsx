@@ -8,21 +8,22 @@ import { fileActions, sheets as sheetActions } from './actions';
 import { ui, useUi, type ToolTab } from './store';
 import { ToolPanel } from './ToolPanels';
 import { doc } from '../state/doc';
+import { PetakLogo } from './Logo';
 
 export function TopBar({ onToggleTheme, dark }: { onToggleTheme: () => void; dark: boolean }) {
   const s = useDoc();
   const [menu, setMenu] = useState(false);
   return (
     <header className="topbar">
-      <div className="brand" aria-hidden>
-        oc
+      <div className="brand">
+        <PetakLogo size={30} />
       </div>
       <div className="title">
-        <b data-testid="file-name">
+        <span className="wordmark">Petak</span>
+        <small data-testid="file-name">
           {s.file.name}
-          {s.dirty && <span className="dot" title="Unsaved changes" />}
-        </b>
-        <small>{s.dirty ? 'Edited · autosaved locally' : s.savedAt ? 'Saved' : 'OpenCells'}</small>
+          {s.dirty && <span className="dot" title="Unsaved changes" aria-label="unsaved changes" />}
+        </small>
       </div>
       <button className="icon-btn" aria-label="Undo" data-testid="undo" onClick={() => doc.undo()}>
         <Undo2 size={22} />

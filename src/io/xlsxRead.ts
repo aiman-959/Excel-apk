@@ -5,7 +5,9 @@ import type { ICellData, IWorksheetData } from '@univerjs/core';
 import { StyleTable, xStyleToUniver, argbToRgb } from './styles';
 import { parseRange } from './a1';
 import type { AppMeta, CfEntry, CfRule, LoadChunk, LoadResult, ParsedMeta } from './types';
-import { META_SHEET, readMetaRows } from './meta';
+import { META_SHEET, LEGACY_META_SHEETS, readMetaRows } from './meta';
+
+const isMetaSheet = (name: string) => name === META_SHEET || LEGACY_META_SHEETS.includes(name);
 import { extractVba } from './vba';
 
 const EXCEL_EPOCH = Date.UTC(1899, 11, 30);
@@ -24,7 +26,7 @@ export async function parseXlsx(buf: ArrayBuffer, name: string): Promise<ParsedX
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
   const sheets = wb.worksheets
-    .filter((ws) => ws.name !== META_SHEET)
+    .filter((ws) => !isMetaSheet(ws.name))
     .map((ws, i) => ({ id: 'sheet' + (i + 1), name: ws.name, rows: ws.actualRowCount ? ws.rowCount : 0, cols: ws.columnCount }));
   return { wb, vba, meta: { sheets, hasVba: !!vba, format: vba || /\.xlsm$/i.test(name) ? 'xlsm' : 'xlsx' } };
 }
@@ -57,7 +59,7 @@ export function* streamXlsx(p: ParsedXlsx, chunkRows: number): Generator<LoadChu
   const total = p.meta.sheets.reduce((a, s) => a + s.rows, 0) || 1;
   let done = 0;
   const order: string[] = [];
-  const xsheets = p.wb.worksheets.filter((ws) => ws.name !== META_SHEET);
+  const xsheets = p.wb.worksheets.filter((ws) => !isMetaSheet(ws.name));
   for (let i = 0; i < xsheets.length; i++) {
     const ws = xsheets[i];
     const id = p.meta.sheets[i].id;
@@ -105,7 +107,7 @@ export function* streamXlsx(p: ParsedXlsx, chunkRows: number): Generator<LoadChu
     }
   }
   let meta: AppMeta | null = null;
-  const metaWs = p.wb.getWorksheet(META_SHEET);
+  const metaWs = p.wb.worksheets.find((ws) => isMetaSheet(ws.name));
   if (metaWs) {
     const lines: string[] = [];
     metaWs.eachRow((row) => lines.push(String(row.getCell(1).value ?? '')));
@@ -182,7 +184,7 @@ function cfFromExcel(r: Record<string, unknown>): CfRule | null {
       return cols.length >= 2 ? { type: 'colorScale', colors: cols.slice(0, 3) as [string, string] } : null;
     }
     case 'dataBar':
-      return { type: 'dataBar', color: argbToRgb((r as { color?: { argb?: string } }).color) ?? '#5b8def' };
+      return { type: 'dataBar', color: argbToRgb((r as { color?: { argb?: string } }).color) ?? '#22c55e' };
     default:
       return null;
   }

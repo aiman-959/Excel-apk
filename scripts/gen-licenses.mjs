@@ -54,11 +54,11 @@ const KEY = [
 
 const md = `# Third-party licences
 
-OpenCells is licensed under the **GNU General Public License v3.0** (GPL-3.0-only, see \`LICENSE\`).
+Petak is licensed under the **GNU General Public License v3.0** (GPL-3.0-only, see \`LICENSE\`).
 All bundled third-party components use licences that are compatible with GPLv3:
 
 * **MIT, ISC, BSD-2/3-Clause, 0BSD, Zlib, BlueOak-1.0.0, Unlicense** — permissive, GPLv3-compatible.
-* **Apache-2.0** — compatible with GPL**v3** (not with GPLv2), which is why OpenCells is GPLv3.
+* **Apache-2.0** — compatible with GPL**v3** (not with GPLv2), which is why Petak is GPLv3.
 * **GPL-3.0-only** (HyperFormula) — same licence family; it is the reason the project is GPL-3.0-only rather than "or later".
 * **JSZip** is dual-licensed "MIT OR GPL-3.0-or-later"; it is used under MIT.
 
@@ -69,6 +69,14 @@ All bundled third-party components use licences that are compatible with GPLv3:
 ${KEY.map((k) => `| ${k[0]} | ${k[1]} | ${k[2]} | ${k[3]} |`).join('\n')}
 
 Android build-time tools (Gradle, Android Gradle Plugin, AndroidX libraries pulled in by Capacitor) are Apache-2.0.
+
+## Fonts and artwork
+
+| Asset | Licence | Notes |
+|---|---|---|
+| Space Grotesk Bold (Latin subset, \`src/assets/fonts/space-grotesk-latin-700-normal.woff2\`) | SIL Open Font License 1.1 | Used for the "Petak" wordmark. Licence text: \`src/assets/fonts/SpaceGrotesk-OFL.txt\`. The OFL allows bundling the font with software under any licence. |
+| Petak logo and icons (\`assets/brand/\`, Android launcher icons) | GPL-3.0-only (part of this project) | Original artwork. |
+
 
 ## Full list of production npm packages (${seen.size})
 

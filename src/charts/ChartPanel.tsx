@@ -27,7 +27,7 @@ function readValues(def: ChartDef): unknown[][] {
 export function chartOption(def: ChartDef, values: unknown[][], dark: boolean): echarts.EChartsCoreOption {
   const { categories, series } = toSeries(values);
   const text = dark ? '#ececf3' : '#1c1c28';
-  const palette = ['#5b5bd6', '#e8772e', '#2f9e6b', '#d6455b', '#1e88c7', '#a24bd1', '#e0b100'];
+  const palette = ['#15803d', '#fbbf24', '#22c55e', '#1e88c7', '#e8772e', '#14532d', '#b42318', '#7c3aed'];
   const base = { color: palette, textStyle: { color: text }, title: { text: def.title, left: 'center', textStyle: { fontSize: 14, color: text } }, tooltip: { trigger: def.type === 'pie' ? 'item' : 'axis' }, legend: { bottom: 0, textStyle: { color: text } }, animation: getTier().animations !== 'reduced' };
   if (def.type === 'pie') {
     const s = series[0] ?? { name: '', data: [] };

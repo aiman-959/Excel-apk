@@ -8,7 +8,7 @@ import { data, edit, fmt, sheets } from './actions';
 import { guard, ui, type ToolTab } from './store';
 import { useSelection } from './hooks';
 
-const COLORS = ['#1c1c28', '#5d5d72', '#d6455b', '#e8772e', '#e0b100', '#2f9e6b', '#1e88c7', '#5b5bd6', '#a24bd1', '#ffffff', '#fde2e4', '#ffe8cc', '#fff6bf', '#d3f9d8', '#d0ebff', '#e5dbff'];
+const COLORS = ['#14231a', '#4a5a50', '#b42318', '#e8772e', '#fbbf24', '#15803d', '#1e88c7', '#14532d', '#7c3aed', '#ffffff', '#fde2e4', '#ffe8cc', '#fef3c7', '#dcfce7', '#d0ebff', '#ede9fe'];
 
 const run = (fn: () => unknown) => () => guard(fn);
 

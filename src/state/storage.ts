@@ -1,5 +1,5 @@
 /** Tiny IndexedDB key/value store (works in Android WebView and browsers). */
-const DB = 'opencells';
+const DB = 'petak';
 const STORE = 'kv';
 
 let dbp: Promise<IDBDatabase> | null = null;
@@ -39,14 +39,14 @@ export const kv = {
 export const prefs = {
   get(key: string, def = ''): string {
     try {
-      return localStorage.getItem('oc.' + key) ?? def;
+      return localStorage.getItem('petak.' + key) ?? def;
     } catch {
       return def;
     }
   },
   set(key: string, v: string) {
     try {
-      localStorage.setItem('oc.' + key, v);
+      localStorage.setItem('petak.' + key, v);
     } catch {
       /* private mode */
     }

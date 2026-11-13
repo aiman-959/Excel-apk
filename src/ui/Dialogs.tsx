@@ -85,7 +85,7 @@ export function CfDialog() {
           rule = { type: 'colorScale', colors: ['#f8696b', '#ffeb84', '#63be7b'] };
           break;
         case 'bar':
-          rule = { type: 'dataBar', color: '#7c7cf0' };
+          rule = { type: 'dataBar', color: '#22c55e' };
           break;
       }
       doc.applyCf([{ sheetId: doc.wb.getActiveSheet().getSheetId(), ranges: range.split(/[,\s]+/).filter(Boolean), rule }]);
@@ -256,9 +256,9 @@ export function AboutDialog() {
     if (pm) setMem((pm.usedJSHeapSize / 1048576).toFixed(0) + ' MB JS heap');
   }, []);
   return (
-    <Dialog title="About OpenCells" onClose={close} testId="dlg-about">
+    <Dialog title="About Petak" onClose={close} testId="dlg-about">
       <p>
-        <b>OpenCells</b> — an open-source spreadsheet for Android phones and tablets. Licensed under the GNU GPL v3.
+        <b>Petak</b> — an open-source spreadsheet for Android phones and tablets. Licensed under the GNU GPL v3.
       </p>
       <h4>This device</h4>
       <table className="preview">

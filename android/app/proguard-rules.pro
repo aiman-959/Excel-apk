@@ -24,6 +24,6 @@
 -keep class com.getcapacitor.** { *; }
 -keep @com.getcapacitor.annotation.CapacitorPlugin class * { *; }
 -keepclassmembers class * { @com.getcapacitor.PluginMethod public *; @com.getcapacitor.annotation.ActivityCallback *; }
--keep class org.opencells.app.** { *; }
+-keep class com.zetl.petak.** { *; }
 -keepattributes *Annotation*, JavascriptInterface
 -keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }

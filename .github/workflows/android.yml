@@ -1,4 +1,4 @@
-name: Android APK
+name: Petak Android APK
 
 on:
   push:
@@ -49,25 +49,25 @@ jobs:
       - name: Build debug and release APKs
         working-directory: android
         env:
-          OPENCELLS_KEYSTORE: ${{ env.KEYSTORE_BASE64 != '' && format('{0}/release.jks', runner.temp) || '' }}
-          OPENCELLS_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          OPENCELLS_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          OPENCELLS_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          PETAK_KEYSTORE: ${{ env.KEYSTORE_BASE64 != '' && format('{0}/release.jks', runner.temp) || '' }}
+          PETAK_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          PETAK_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          PETAK_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleDebug assembleRelease --no-daemon
 
       - name: Collect APKs
         run: |
           mkdir -p out
           V=$(node -p "require('./package.json').version")
-          cp android/app/build/outputs/apk/debug/app-debug.apk "out/OpenCells-$V-debug.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/Petak-v$V-debug.apk"
           for f in android/app/build/outputs/apk/release/*.apk; do
-            case "$f" in *unsigned*) cp "$f" "out/OpenCells-$V-release-unsigned.apk" ;; *) cp "$f" "out/OpenCells-$V-release.apk" ;; esac
+            case "$f" in *unsigned*) cp "$f" "out/Petak-v$V-unsigned.apk" ;; *) cp "$f" "out/Petak-v$V.apk" ;; esac
           done
           ls -la out
 
       - uses: actions/upload-artifact@v4
         with:
-          name: OpenCells-apks
+          name: Petak-apks
           path: out/*.apk
 
       - name: Publish GitHub Release

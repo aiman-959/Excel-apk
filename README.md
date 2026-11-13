@@ -1,4 +1,6 @@
-# OpenCells
+<p align="center"><img src="assets/brand/petak-logo.svg" width="120" alt="Petak logo"></p>
+
+# Petak
 
 **An open-source spreadsheet app for Android phones and tablets.**
 Open, edit and save `.xlsx`, `.xlsm` and `.csv` files from your phone storage, with formulas, charts,
@@ -23,7 +25,7 @@ License: **GNU GPL v3** (see [LICENSE](LICENSE)). Third-party components: [THIRD
 
 | # | Feature | Notes |
 |---|---|---|
-| 1 | **Open / edit / save** `.xlsx`, `.xlsm`, `.csv` (also opens `.xls`, `.ods`) | Android Storage Access Framework picker (Downloads, Drive, SD card…). **Save** writes back to the same file, **Save as** creates a new one. "Open with OpenCells" from file managers. |
+| 1 | **Open / edit / save** `.xlsx`, `.xlsm`, `.csv` (also opens `.xls`, `.ods`) | Android Storage Access Framework picker (Downloads, Drive, SD card…). **Save** writes back to the same file, **Save as** creates a new one. "Open with Petak" from file managers. |
 | 2 | **Formulas** with 420+ functions via HyperFormula | SUM, AVERAGE, IF, IFS, XLOOKUP, VLOOKUP, INDEX/MATCH, SUMIFS, COUNTIFS, AVERAGEIFS, TEXT (Excel number formats), DATE, TODAY, EOMONTH, EDATE, DATEDIF, NETWORKDAYS… Cross-sheet references, function suggestions in the formula bar. |
 | 3 | **Sheets, freeze panes, sort, filter, find & replace** | Add / rename / duplicate / delete sheets (long-press a tab). Freeze top row, first column or at selection. Sort keeps header rows. Column filters. |
 | 4 | **Formatting** | Number formats (incl. custom patterns), bold/italic/underline/strike, text and fill colours, borders, alignment, wrap, merge cells, conditional formatting (greater/less/between/equal, text contains, duplicates, colour scale, data bar). Saved to xlsx. |
@@ -68,9 +70,9 @@ License: **GNU GPL v3** (see [LICENSE](LICENSE)). Third-party components: [THIRD
 
 ## Install
 
-1. Download `releases/OpenCells-1.0.0-release.apk` (or the `-debug` one) from this repository on your phone.
+1. Download `releases/Petak-v1.1.0.apk` (or `Petak-v1.1.0-debug.apk`) from this repository on your phone.
 2. Open it and allow "Install unknown apps" for your browser or file manager when Android asks.
-3. Launch **OpenCells** and tap the folder icon to open a spreadsheet.
+3. Launch **Petak** and tap the folder icon to open a spreadsheet.
 
 The release APK in `releases/` is signed with a key created for this build. If you later build and sign your
 own release with a different key, uninstall the old app first (Android refuses updates signed by another key).
@@ -97,7 +99,7 @@ latest/bin/sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.
 ### Debug APK
 
 ```bash
-git clone https://github.com/aiman-959/Excel-apk.git opencells && cd opencells
+git clone https://github.com/aiman-959/petak.git && cd petak
 npm ci
 npm run build                 # type-check + minified, code-split web build into dist/
 npx cap sync android          # copy dist/ into the Android project
@@ -112,14 +114,14 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk   # optional, phone con
 
 ```bash
 # 1. one-time: create your signing key (keep it safe and never commit it)
-keytool -genkeypair -v -keystore ~/opencells-release.jks -alias opencells \
+keytool -genkeypair -v -keystore ~/petak-release.jks -alias petak \
         -keyalg RSA -keysize 4096 -validity 10000
 
 # 2. tell Gradle where it is (android/keystore.properties is git-ignored)
 cat > android/keystore.properties <<'EOF'
-storeFile=/home/you/opencells-release.jks
+storeFile=/home/you/petak-release.jks
 storePassword=YOUR_STORE_PASSWORD
-keyAlias=opencells
+keyAlias=petak
 keyPassword=YOUR_KEY_PASSWORD
 EOF
 
@@ -130,14 +132,14 @@ cd android && ./gradlew assembleRelease
 # Google Play wants an App Bundle instead:  ./gradlew bundleRelease
 ```
 
-Instead of `keystore.properties` you can set the environment variables `OPENCELLS_KEYSTORE`,
-`OPENCELLS_KEYSTORE_PASSWORD`, `OPENCELLS_KEY_ALIAS` and `OPENCELLS_KEY_PASSWORD`.
+Instead of `keystore.properties` you can set the environment variables `PETAK_KEYSTORE`,
+`PETAK_KEYSTORE_PASSWORD`, `PETAK_KEY_ALIAS` and `PETAK_KEY_PASSWORD`.
 Without either, `assembleRelease` produces an unsigned APK.
 
 ### Continuous integration
 `.github/workflows/android.yml` builds both APKs on every push and uploads them as workflow artifacts.
 Pushing a tag such as `v1.0.1` also creates a GitHub Release with the APKs attached. Add the repository secrets
-`KEYSTORE_BASE64` (`base64 -w0 opencells-release.jks`), `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`
+`KEYSTORE_BASE64` (`base64 -w0 petak-release.jks`), `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`
 to get a signed release APK.
 
 ### Develop in the browser
@@ -164,16 +166,16 @@ src/
   state/         document controller (open/save/autosave), IndexedDB storage
   ui/            app chrome, toolbars, dialogs (touch-first)
   charts/ pivot/ macros/ transform/   feature panels (lazy-loaded) and their workers
-android/app/src/main/java/org/opencells/app/
+android/app/src/main/java/com/zetl/petak/
   MainActivity.java, DeviceInfoPlugin.java (RAM/cores/SoC/refresh rate), DocumentsPlugin.java (SAF)
 tests/unit  tests/e2e  tests/perf
 ```
 
 ## How it compares to desktop Excel
-OpenCells is **not a clone of Microsoft Excel**. It is an independent, original app that opens and saves the same
+Petak is **not a clone of Microsoft Excel**. It is an independent, original app that opens and saves the same
 file formats and covers the everyday spreadsheet work listed above. It does not copy Excel's look or branding.
 
-| | OpenCells | Desktop Excel |
+| | Petak | Desktop Excel |
 |---|---|---|
 | Grid size | 1,048,576 rows × 16,384 columns (A…XFD), grows as you scroll | same |
 | Functions | ~420 (HyperFormula) incl. XLOOKUP, IFS, SUMIFS, FILTER, UNIQUE, SORT | ~500 |
@@ -184,7 +186,7 @@ file formats and covers the everyday spreadsheet work listed above. It does not 
 ## Known limitations
 * VBA macros are kept but never executed. JavaScript macros cover the automation use case.
 * Charts, pivot definitions, saved macros and transform queries are stored in a hidden worksheet
-  (`__opencells_meta`). Other apps keep them but do not show them as native charts or pivots.
+  (`__petak_meta`). Other apps keep them but do not show them as native charts or pivots.
 * xlsx features outside the list above (images, comments, data validation, sparklines, external links) are not imported.
 * Very large files (500k+ cells on Low tier) can exceed WebView memory. The app warns before opening files over 100k rows on Low and Mid tiers.
 
@@ -192,6 +194,6 @@ file formats and covers the everyday spreadsheet work listed above. It does not 
 Issues and pull requests are welcome. By contributing you agree your work is licensed under GPL-3.0.
 
 ## License
-OpenCells is free software: you can redistribute it and/or modify it under the terms of the GNU General
+Petak is free software: you can redistribute it and/or modify it under the terms of the GNU General
 Public License version 3 as published by the Free Software Foundation. It is distributed WITHOUT ANY WARRANTY.
 See [LICENSE](LICENSE).

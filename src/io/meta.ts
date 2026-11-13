@@ -6,7 +6,9 @@
  */
 import type { AppMeta } from './types';
 
-export const META_SHEET = '__opencells_meta';
+export const META_SHEET = '__petak_meta';
+/** Name used by builds released before the rename; still read so older files keep their charts/macros. */
+export const LEGACY_META_SHEETS = ['__opencells_meta'];
 const CHUNK = 30000; // < 32767 chars per cell
 
 type IdMap = (id: string) => string | undefined;

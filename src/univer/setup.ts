@@ -12,6 +12,7 @@
  */
 import { LocaleType, Univer, mergeLocales, UniverInstanceType } from '@univerjs/core';
 import { FUniver } from '@univerjs/core/facade';
+import { greenTheme } from '@univerjs/themes';
 import { UniverDocsPlugin } from '@univerjs/docs';
 import { UniverDocsUIPlugin } from '@univerjs/docs-ui';
 import { UniverFormulaEnginePlugin } from '@univerjs/engine-formula';
@@ -55,6 +56,23 @@ import '@univerjs/preset-sheets-sort/lib/index.css';
 import '@univerjs/preset-sheets-find-replace/lib/index.css';
 import '@univerjs/preset-sheets-conditional-formatting/lib/index.css';
 
+/** Univer's green theme, with the primary scale aligned to Petak's brand (#15803D primary, #14532D dark). */
+export const petakTheme = {
+  ...greenTheme,
+  primary: {
+    50: '#F0FDF4',
+    100: '#DCFCE7',
+    200: '#BBF7D0',
+    300: '#86EFAC',
+    400: '#4ADE80',
+    500: '#22C55E',
+    600: '#15803D',
+    700: '#166534',
+    800: '#14532D',
+    900: '#052E16',
+  },
+};
+
 export interface UniverHandle {
   univer: Univer;
   api: FUniver;
@@ -71,6 +89,7 @@ export function isTouchDevice(): boolean {
 export function createUniverApp(container: HTMLElement, opts: { mobile?: boolean } = {}): UniverHandle {
   const mobile = opts.mobile ?? isTouchDevice();
   const univer = new Univer({
+    theme: petakTheme,
     locale: LocaleType.EN_US,
     locales: { [LocaleType.EN_US]: mergeLocales(coreEn, filterEn, sortEn, findEn, cfEn) },
   });

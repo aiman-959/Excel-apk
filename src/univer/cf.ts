@@ -97,7 +97,7 @@ export function cfFromUniver(sheetId: string, u: UCfRule): CfEntry | null {
     const cfg = (r.config as Array<{ color: string }>) ?? [];
     if (cfg.length >= 2) rule = { type: 'colorScale', colors: cfg.slice(0, 3).map((c) => c.color) as [string, string] };
   } else if (r.type === 'dataBar') {
-    rule = { type: 'dataBar', color: ((r.config as { positiveColor?: string }) ?? {}).positiveColor ?? '#5b8def' };
+    rule = { type: 'dataBar', color: ((r.config as { positiveColor?: string }) ?? {}).positiveColor ?? '#22c55e' };
   }
   return rule ? { sheetId, ranges, rule } : null;
 }

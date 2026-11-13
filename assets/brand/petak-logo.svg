@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"
+viewBox="0 0 240 240">
+<defs><pattern id="rows" width="8" height="8"
+patternUnits="userSpaceOnUse"><line x1="0" y1="4" x2="8" y2="4"
+stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="2"/>
+</pattern></defs>
+<rect width="240" height="240" rx="56" fill="#14532D"/>
+<rect x="44" y="44" width="44" height="44" rx="8" fill="#16A34A"/>
+<rect x="98" y="44" width="44" height="44" rx="8" fill="#22C55E"/>
+<rect x="152" y="44" width="44" height="44" rx="8" fill="#15803D"/>
+<rect x="44" y="98" width="44" height="44" rx="8" fill="#22C55E"/>
+<rect x="98" y="98" width="44" height="44" rx="8" fill="#15803D"/>
+<rect x="152" y="98" width="44" height="44" rx="8" fill="#FBBF24"/>
+<rect x="44" y="152" width="44" height="44" rx="8" fill="#15803D"/>
+<rect x="98" y="152" width="44" height="44" rx="8" fill="#16A34A"/>
+<rect x="152" y="152" width="44" height="44" rx="8" fill="#22C55E"/>
+<g fill="url(#rows)">
+<rect x="44" y="44" width="44" height="44" rx="8"/>
+<rect x="98" y="44" width="44" height="44" rx="8"/>
+<rect x="152" y="44" width="44" height="44" rx="8"/>
+<rect x="44" y="98" width="44" height="44" rx="8"/>
+<rect x="98" y="98" width="44" height="44" rx="8"/>
+<rect x="152" y="98" width="44" height="44" rx="8"/>
+<rect x="44" y="152" width="44" height="44" rx="8"/>
+<rect x="98" y="152" width="44" height="44" rx="8"/>
+<rect x="152" y="152" width="44" height="44" rx="8"/>
+</g></svg>
