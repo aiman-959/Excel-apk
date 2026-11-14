@@ -33,7 +33,7 @@ import { rpcClient, type RpcClient } from './rpc';
 import { governor } from '../device/governor';
 import { RuleFormulaSupport } from './ruleFormulas';
 import type { FormulaWorkerApi } from './formula.worker';
-import type { Raw, SheetChanges } from './formulaCore';
+import type { BookName, Raw, SheetChanges } from './formulaCore';
 
 const STRUCTURAL = new Set([
   InsertRowMutation.id,
@@ -97,6 +97,11 @@ export class FormulaBridge {
     return () => this.listeners.delete(fn);
   }
 
+  /** Replace the workbook's defined names in the engine and apply the recalculated cells. */
+  setNames(names: BookName[]) {
+    return this.enqueue(async () => this.apply(await this.rpc.call('setNames', names as never)));
+  }
+
   functionNames() {
     return this.rpc.call('functionNames');
   }
@@ -116,10 +121,10 @@ export class FormulaBridge {
    * Attach to a (freshly created) workbook: stream every sheet into the worker
    * in row chunks (progress reported), then compute all formulas once.
    */
-  async attach(fwb: FWorkbook, progress?: Progress) {
+  async attach(fwb: FWorkbook, progress?: Progress, opts: { date1904?: boolean; names?: BookName[] } = {}) {
     this.unitId = fwb.getId();
     const wb = this.workbook!;
-    await this.enqueue(() => this.rpc.call('reset'));
+    await this.enqueue(() => this.rpc.call('reset', opts as never));
     const sheets = wb.getSheets();
     let total = 0;
     for (const s of sheets) total += s.getLastRowWithContent() + 1;

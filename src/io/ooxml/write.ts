@@ -209,7 +209,7 @@ export function writeOoxml(data: IWorkbookData, opts: WriteOptions, onProgress?:
   const origParts = new Set(origSheetEls.filter((s) => s.kind === 'worksheet' && s.part).map((s) => s.part!));
   const claimed = new Set<string>();
   const current = fingerprints({ sheetOrder: data.sheetOrder, sheets: data.sheets as never, resources: data.resources as never }, opts.cf, opts.pictures ?? []);
-  const same = (sheetId: string, kind: keyof Fingerprints[string]) => !!opts.baseline?.[sheetId]?.[kind] && opts.baseline[sheetId][kind] === current[sheetId]?.[kind];
+  const sameAsLoaded = (sheetId: string, kind: keyof Fingerprints[string]) => !!opts.baseline?.[sheetId]?.[kind] && opts.baseline[sheetId][kind] === current[sheetId]?.[kind];
   const review = parseResources(data.resources as never);
   const filterRes = (() => {
     try {
@@ -285,6 +285,8 @@ export function writeOoxml(data: IWorkbookData, opts: WriteOptions, onProgress?:
       }
     }
     const set = (name: string, xml: string | null) => (xml ? els.set(name, [xml]) : els.delete(name));
+    // "unchanged" only means something for a sheet that still has its original part
+    const same = (sid: string, kind: keyof Fingerprints[string]) => isOriginal && sameAsLoaded(sid, kind);
 
     // ---- rows and cells
     const cellData = (sd.cellData ?? {}) as Record<string, Record<string, ICellData | null>>;
@@ -339,8 +341,9 @@ export function writeOoxml(data: IWorkbookData, opts: WriteOptions, onProgress?:
             if (ERRORS.has(s)) cells.push(`${open} t="e">${body}<v>${FILE_ERROR[s] ?? s}</v></c>`);
             else if (hasFormula) cells.push(`${open} t="str">${body}<v>${encodeXml(s)}</v></c>`);
             else {
-              const si = typeof custom?.si === 'number' ? strings.rich(custom.si) : undefined;
-              cells.push(`${open} t="s"><v>${si !== undefined && richStillMatches(custom!.si as number, s) ? si : strings.text(s)}</v></c>`);
+              // a rich string is carried over only while the cell still shows exactly that text
+              const si = typeof custom?.si === 'number' && richStillMatches(custom.si, s) ? strings.rich(custom.si) : undefined;
+              cells.push(`${open} t="s"><v>${si ?? strings.text(s)}</v></c>`);
             }
           }
           if (c < minC) minC = c;

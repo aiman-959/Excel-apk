@@ -15,6 +15,12 @@ import { FormulaBridge, type Progress } from '../engine/formulaBridge';
 import { rpcClient, type RpcClient } from '../engine/rpc';
 import type { IoWorkerApi } from '../io/io.worker';
 import type { AppMeta, CfEntry, LoadChunk, LoadResult, ParsedMeta } from '../io/types';
+import type { LoadResultX, NameDef } from '../io/ooxml/types';
+import type { TableInfo } from '../io/ooxml/formulaText';
+import { fingerprints, type Fingerprints } from '../io/ooxml/fingerprint';
+import { notesResource, RES_DV } from '../io/review';
+import { pictures, setCellPictures, clearCellPictures } from '../pictures/pictures';
+import { kv } from './storage';
 import { cfFromUniver, cfToUniver, type UCfRule } from '../univer/cf';
 import { getTier } from '../device/tier';
 import { governor } from '../device/governor';
@@ -41,6 +47,23 @@ export interface LoadUi {
   progress: Progress;
   confirm: (message: string) => Promise<boolean>;
 }
+
+/**
+ * What Petak remembers about the file a workbook came from, so saving patches that file
+ * instead of rebuilding it (nothing the app does not model is lost).
+ */
+export interface Origin {
+  /** the file exactly as it was opened */
+  original: ArrayBuffer;
+  /** fingerprints of columns / rules / notes / filter / pictures right after opening */
+  baseline: Fingerprints;
+  /** built-in names (print area, print titles, filter database): kept, not shown */
+  builtinNames: NameDef[];
+  tables: Array<TableInfo & { sheetId: string }>;
+  date1904: boolean;
+}
+const ORIGIN_KEY = 'session:origin';
+const MEDIA_KEY = 'session:media';
 
 type Listener = () => void;
 const emptyMeta = (): AppMeta => ({ version: 1, charts: [], macros: [], queries: [], pivots: [] });
@@ -82,6 +105,13 @@ class Doc {
   private saver = new AutosaveTracker();
   private repaintSparklines: () => void = () => {};
   private saving: Promise<void> | null = null;
+  private mediaDirty = false;
+  /** source package of the open workbook (null for new workbooks and csv/xls/ods) */
+  origin: Origin | null = null;
+  /** names defined in the workbook (not the built-in ones) */
+  names: NameDef[] = [];
+  /** things the last open could not carry over; shown once */
+  loadWarnings: string[] = [];
 
   get api() {
     return this.h.api;
@@ -121,6 +151,22 @@ class Doc {
     };
     this.bridge.onRecalc(repaint);
     setImageListener(() => this.syncMetaRenderers());
+    let pv = pictures.contentVersion;
+    pictures.onRepaint(() => {
+      try {
+        this.wb.getActiveSheet().refreshCanvas();
+      } catch {
+        /* no workbook yet */
+      }
+    });
+    pictures.subscribe(() => {
+      if (this.loading || pictures.contentVersion === pv) return;
+      pv = pictures.contentVersion;
+      this.mediaDirty = true;
+      this.saver.touch();
+      this.markDirty();
+      this.emit({});
+    });
     this.repaintSparklines = repaint;
     const cmd = this.injector<ICommandService>(ICommandService);
     cmd.onCommandExecuted((info, options) => {
@@ -143,6 +189,14 @@ class Doc {
           // these move or create cells: rewrite the affected sheets' cell chunks
           for (const sid of [p?.subUnitId, p?.sheet?.id, p?.from?.subUnitId, p?.to?.subUnitId]) if (sid) this.saver.markSheet(sid);
         } else this.saver.touch(); // formats, merges, notes...: only the session header changes
+        // pictures are anchored to cells: follow inserted / deleted rows and columns
+        const rg = (info.params as { range?: { startRow: number; endRow: number; startColumn: number; endColumn: number } } | undefined)?.range;
+        if (rg && p?.subUnitId) {
+          if (info.id === 'sheet.mutation.insert-row') pictures.shift(p.subUnitId, 'row', rg.startRow, rg.endRow - rg.startRow + 1);
+          else if (info.id === 'sheet.mutation.remove-rows') pictures.shift(p.subUnitId, 'row', rg.startRow, -(rg.endRow - rg.startRow + 1));
+          else if (info.id === 'sheet.mutation.insert-col') pictures.shift(p.subUnitId, 'col', rg.startColumn, rg.endColumn - rg.startColumn + 1);
+          else if (info.id === 'sheet.mutation.remove-col') pictures.shift(p.subUnitId, 'col', rg.startColumn, -(rg.endColumn - rg.startColumn + 1));
+        }
         if (!opt?.fromFormulaEngine) this.markDirty();
         else this.scheduleAutosave();
       }
@@ -257,6 +311,12 @@ class Doc {
       sheets: { sheet1: { id: 'sheet1', name: 'Sheet1', rowCount: 1000, columnCount: 26, defaultColumnWidth: 88, defaultRowHeight: 24 } as IWorksheetData },
     });
     this.meta = emptyMeta();
+    this.origin = null;
+    this.names = [];
+    pictures.reset();
+    clearCellPictures();
+    kv.del(ORIGIN_KEY).catch(() => {});
+    kv.del(MEDIA_KEY).catch(() => {});
     setSparklines([]);
     setDrawings(undefined, 'mm');
     await this.bridge.attach(fwb);
@@ -271,6 +331,9 @@ class Doc {
     const io = this.io();
     ui.progress(0, 1, 'Reading file');
     const t0 = performance.now();
+    // xlsx/xlsm: keep the bytes, saving patches this package (the buffer itself is handed to the worker)
+    const isPackage = new Uint8Array(file.buffer, 0, Math.min(2, file.buffer.byteLength)).join() === '80,75' && !/\.ods$/i.test(file.name);
+    const original = isPackage ? file.buffer.slice(0) : null;
     const meta: ParsedMeta = await io.callT('parse', [file.buffer, file.name], [file.buffer]);
     const rows = meta.sheets.reduce((a, s) => a + s.rows, 0);
     const tier = getTier();
@@ -282,7 +345,7 @@ class Doc {
     }
     const sheets: Record<string, IWorksheetData> = {};
     const order: string[] = [];
-    const res: LoadResult = await io.callT('stream', [tier.chunkRows], [], (p) => {
+    const res = (await io.callT('stream', [tier.chunkRows], [], (p) => {
       const ch = p as LoadChunk;
       if (ch.kind === 'sheetStart') {
         sheets[ch.sheet.id] = { ...(ch.sheet as IWorksheetData), cellData: {} };
@@ -290,21 +353,42 @@ class Doc {
       } else {
         const cd = sheets[order[ch.index]].cellData as Record<number, Record<number, ICellData>>;
         for (const r in ch.cellData) cd[r] = ch.cellData[r];
+        if (ch.rowData) sheets[order[ch.index]].rowData = ch.rowData as never;
         ui.progress(ch.done, ch.total, 'Loading rows');
       }
-    });
+    })) as LoadResult & Partial<LoadResultX>;
     ui.progress(1, 1, 'Building grid');
     await new Promise((r) => setTimeout(r, 0));
     this.loading = true;
     this.disposeCurrent();
     const unitId = 'wb' + Date.now().toString(36);
-    const resources = (res.resources ?? []).map((r) => (r.name === RES_THREADS ? { ...r, data: withUnitId(r.data, unitId) } : r));
-    const fwb = this.h.api.createWorkbook({ id: unitId, name: file.name, styles: res.styles, sheetOrder: order, sheets, resources } as Partial<IWorkbookData>);
+    const resources: Array<{ name: string; data: string }> = (res.resources ?? []).map((r) => (r.name === RES_THREADS ? { ...r, data: withUnitId(r.data, unitId) } : r));
+    const notes = res.notes ? notesResource(res.notes) : null;
+    if (notes) resources.push(notes);
+    if (res.dv && Object.keys(res.dv).length) resources.push({ name: RES_DV, data: JSON.stringify(res.dv) });
+    if (res.filters && Object.keys(res.filters).length) resources.push({ name: 'SHEET_FILTER_PLUGIN', data: JSON.stringify(res.filters) });
+    const threads = (res.meta as AppMeta | null)?.threads;
+    if (threads && Object.keys(threads).length && !resources.some((r) => r.name === RES_THREADS)) resources.push({ name: RES_THREADS, data: withUnitId(JSON.stringify(threads), unitId) });
+    const fwb = this.h.api.createWorkbook({ id: unitId, name: file.name, styles: res.styles, sheetOrder: order, sheets, resources, defaultStyle: res.defaultStyle } as Partial<IWorkbookData>);
     this.meta = { ...emptyMeta(), ...(res.meta ?? {}) };
+    this.names = (res.names ?? []).filter((n) => !n.builtin && !n.orphan);
+    this.loadWarnings = res.warnings ?? [];
+    pictures.reset(res.pictures ?? [], res.media ?? []);
+    this.syncCellPictures(sheets);
     setSparklines(this.meta.sparklines ?? []);
     setDrawings(this.meta.drawings, this.meta.drawUnit ?? 'mm');
     this.applyCf(res.cf);
-    await this.bridge.attach(fwb, ui.progress);
+    await this.bridge.attach(fwb, ui.progress, { date1904: res.date1904, names: this.names });
+    this.origin = original
+      ? {
+          original,
+          baseline: this.fingerprint(),
+          builtinNames: (res.names ?? []).filter((n) => n.builtin || n.orphan),
+          tables: res.tables ?? [],
+          date1904: !!res.date1904,
+        }
+      : null;
+    this.persistOrigin();
     this.loading = false;
     this.emit({
       file: { name: file.name, format: meta.format, uri: file.uri, handle: file.handle, vba: res.vba },
@@ -315,6 +399,30 @@ class Doc {
     this.markAllForSave();
     console.info(`[open] ${file.name}: ${rows} rows in ${Math.round(performance.now() - t0)} ms`);
     return true;
+  }
+
+  /** Fingerprints of the modelled-but-maybe-untouched parts of every sheet (see io/ooxml/fingerprint.ts). */
+  private fingerprint(): Fingerprints {
+    const snap = this.wb.getWorkbook().getSnapshot();
+    return fingerprints({ sheetOrder: snap.sheetOrder, sheets: snap.sheets as never, resources: this.resources() }, this.collectCf(), pictures.list);
+  }
+  private persistOrigin() {
+    const media = [...pictures.media].map(([path, m]) => ({ path, bytes: m.bytes }));
+    (this.origin ? kv.set(ORIGIN_KEY, this.origin) : kv.del(ORIGIN_KEY)).catch((e) => console.warn('origin not stored', e));
+    (media.length ? kv.set(MEDIA_KEY, media) : kv.del(MEDIA_KEY)).catch((e) => console.warn('media not stored', e));
+  }
+  /** "Place in cell" pictures are marked on their cells (custom.img). */
+  private syncCellPictures(sheets: Record<string, IWorksheetData>) {
+    clearCellPictures();
+    for (const [id, sh] of Object.entries(sheets)) {
+      const cells: Array<{ row: number; col: number; path: string }> = [];
+      const cd = (sh.cellData ?? {}) as Record<string, Record<string, ICellData | null>>;
+      for (const r in cd) for (const c in cd[r]) {
+        const img = (cd[r][c]?.custom as { img?: string } | undefined)?.img;
+        if (img) cells.push({ row: +r, col: +c, path: img });
+      }
+      if (cells.length) setCellPictures(id, cells);
+    }
   }
 
   // ---------------------------------------------------------------- conditional formats
@@ -377,13 +485,31 @@ class Doc {
       return { data: await this.io().call('csv', data as never, ','), mime: MIME.csv };
     }
     const vba = this.snap.file.vba;
-    const buf = (await this.io().callT(
+    // names may have been shifted by row/column edits inside the engine
+    const names: NameDef[] = [...this.names, ...(this.origin?.builtinNames ?? [])];
+    const out = (await this.io().callT(
       'write',
-      [this.workbookData(), { cf: this.collectCf(), meta: this.meta, vba: vba ? vba.slice(0) : null, macroEnabled: format === 'xlsm' }],
+      [
+        this.workbookData(),
+        {
+          cf: this.collectCf(),
+          meta: this.meta,
+          macroEnabled: format === 'xlsm',
+          vba: this.origin ? null : vba ? vba.slice(0) : null,
+          original: this.origin?.original ?? null,
+          baseline: this.origin?.baseline,
+          names,
+          pictures: pictures.list,
+          media: [...pictures.added].map((path) => ({ path, bytes: pictures.media.get(path)!.bytes })).filter((m) => m.bytes),
+        },
+      ],
       [],
-    )) as ArrayBuffer;
-    return { data: buf, mime: format === 'xlsm' ? MIME.xlsm : MIME.xlsx };
+    )) as { buf: ArrayBuffer; warnings: string[] };
+    this.saveWarnings = out.warnings;
+    return { data: out.buf, mime: format === 'xlsm' ? MIME.xlsm : MIME.xlsx };
   }
+  /** warnings from the last serialize (e.g. macros dropped when saving as .xlsx) */
+  saveWarnings: string[] = [];
 
   /** Save to the original document when possible; CSV/XLS/ODS sources are saved as-is for CSV, else asked. */
   async save(): Promise<void> {
@@ -419,7 +545,14 @@ class Doc {
       cf: this.collectCf(),
       file: { name: f.name, format: f.format, uri: f.uri, vba: f.vba },
       dirty: this.snap.dirty,
+      names: this.names,
+      pictures: pictures.list,
+      addedMedia: [...pictures.added],
     };
+    if (this.mediaDirty) {
+      this.mediaDirty = false;
+      this.persistOrigin();
+    }
     this.saving = this.saver
       .save(this.wb.getWorkbook(), extra, this.resources())
       .catch((e) => console.warn('autosave failed', e))
@@ -430,17 +563,22 @@ class Doc {
   async restoreSession(): Promise<boolean> {
     const s = await loadSession();
     if (!s) return false;
-    const extra = s.extra as { meta: AppMeta; cf: CfEntry[]; file: FileInfo; dirty: boolean };
+    const extra = s.extra as { meta: AppMeta; cf: CfEntry[]; file: FileInfo; dirty: boolean; names?: NameDef[]; pictures?: typeof pictures.list; addedMedia?: string[] };
     this.loading = true;
     this.disposeCurrent();
     const fwb = this.h.api.createWorkbook(s.data);
     this.meta = { ...emptyMeta(), ...extra.meta };
+    this.origin = (await kv.get<Origin>(ORIGIN_KEY).catch(() => undefined)) ?? null;
+    this.names = extra.names ?? [];
+    const media = (await kv.get<Array<{ path: string; bytes: ArrayBuffer }>>(MEDIA_KEY).catch(() => undefined)) ?? [];
+    pictures.reset(extra.pictures ?? [], media, extra.addedMedia ?? []);
+    this.syncCellPictures(s.data.sheets as never);
     setSparklines(this.meta.sparklines ?? []);
     setDrawings(this.meta.drawings, this.meta.drawUnit ?? 'mm');
     // the saved session carries Univer's plugin resources (conditional formats, notes, comments,
     // validation, filters); only very old sessions need the separate CF list
     if (!s.data.resources?.length) this.applyCf(extra.cf ?? []);
-    await this.bridge.attach(fwb);
+    await this.bridge.attach(fwb, undefined, { date1904: this.origin?.date1904, names: this.names });
     this.loading = false;
     this.emit({ file: extra.file, dirty: extra.dirty, savedAt: s.time });
     this.refreshSheets();

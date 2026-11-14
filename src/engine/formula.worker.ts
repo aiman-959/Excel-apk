@@ -29,7 +29,8 @@ const api = {
   moveCols: (id: string, s: number, n: number, t: number) => engine.moveCols(id, s, n, t),
   setBlock: (id: string, r: number, c: number, rows: never) => engine.setBlock(id, r, c, rows),
   functionNames: () => engine.hf.getRegisteredFunctionNames(),
-  reset: () => engine.beginLoad(),
+  reset: (opts?: { date1904?: boolean; names?: never }) => engine.beginLoad(opts),
+  setNames: (names: never) => engine.setNames(names),
 };
 export type FormulaWorkerApi = typeof api;
 rpcServe(api as never);

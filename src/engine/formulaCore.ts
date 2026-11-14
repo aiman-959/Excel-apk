@@ -37,6 +37,13 @@ function formulaCells(rows: Raw[][]): Array<[number, number]> {
   return out;
 }
 
+export interface BookName {
+  name: string;
+  /** without the leading "=" */
+  formula: string;
+  sheetId?: string;
+}
+
 export class FormulaEngine {
   hf: HyperFormula;
   private idToHf = new Map<string, number>();
@@ -45,6 +52,9 @@ export class FormulaEngine {
   private config = {
     licenseKey: 'gpl-v3',
     useArrayArithmetic: true,
+    // Excel's date system: serial 1 = 1900-01-01 and 1900 counts as a leap year (serial 60 = Feb 29)
+    leapYear1900: true,
+    nullDate: { year: 1899, month: 12, day: 31 },
     dateFormats: ['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY/MM/DD'],
     timeFormats: ['hh:mm', 'hh:mm:ss.sss'],
     maxRows: 1_048_576,
@@ -66,8 +76,17 @@ export class FormulaEngine {
     this.hf = HyperFormula.buildEmpty(this.config, this.namedExpressions);
   }
 
+  /** names defined in the workbook (ranges, constants, formulas) */
+  private names: BookName[] = [];
+
   /** Start a bulk load: discard everything and collect rows until resumeAll(). */
-  beginLoad() {
+  beginLoad(opts: { date1904?: boolean; names?: BookName[] } = {}) {
+    this.config = {
+      ...this.config,
+      leapYear1900: !opts.date1904,
+      nullDate: opts.date1904 ? { year: 1904, month: 1, day: 1 } : { year: 1899, month: 12, day: 31 },
+    };
+    this.names = opts.names ?? [];
     this.hf.destroy();
     this.hf = HyperFormula.buildEmpty(this.config, this.namedExpressions);
     this.idToHf.clear();
@@ -150,11 +169,32 @@ export class FormulaEngine {
       this.pending = null;
       this.loadedFormulas = formulaPos;
       this.hf.destroy();
-      this.hf = HyperFormula.buildFromSheets(sheets, this.config, this.namedExpressions);
+      // workbook-level names must exist while the sheets are parsed, or formulas using them become #NAME?
+      const global = this.names.filter((n) => !n.sheetId && this.validName(n)).map((n) => ({ name: n.name, expression: '=' + n.formula }));
+      try {
+        this.hf = HyperFormula.buildFromSheets(sheets, this.config, [...this.namedExpressions, ...global]);
+      } catch {
+        // a name HyperFormula cannot parse must not stop the workbook from opening
+        this.hf = HyperFormula.buildFromSheets(sheets, this.config, this.namedExpressions);
+        for (const n of global) {
+          try {
+            this.hf.addNamedExpression(n.name, n.expression);
+          } catch {
+            /* skipped */
+          }
+        }
+      }
       for (const [sheetId, n] of ids) {
         const hfId = this.hf.getSheetId(n)!;
         this.idToHf.set(sheetId, hfId);
         this.hfToId.set(hfId, sheetId);
+      }
+      for (const n of this.names.filter((x) => x.sheetId && this.validName(x))) {
+        try {
+          this.hf.addNamedExpression(n.name, '=' + n.formula, this.idToHf.get(n.sheetId!));
+        } catch {
+          /* skipped */
+        }
       }
     }
     // Formula positions come from the loaded rows: HyperFormula's getSheetFormulas() returns a dense
@@ -166,6 +206,33 @@ export class FormulaEngine {
       out.push({ sheetId, cells: pos.map(([r, c]) => this.cellOut(id, r, c)) });
     }
     this.loadedFormulas = new Map();
+    return out;
+  }
+
+  private validName(n: BookName) {
+    return !!n.name && !!n.formula && !/^(TRUE|FALSE)$/i.test(n.name) && !n.name.startsWith('_xlnm.');
+  }
+
+  /** Replace the workbook's names (after the user adds, edits or removes one). */
+  setNames(names: BookName[]): SheetChanges[] {
+    const out: SheetChanges[] = [];
+    const keep = new Set(this.namedExpressions.map((n) => n.name));
+    for (const old of this.names) {
+      if (keep.has(old.name)) continue;
+      try {
+        out.push(...this.collect(this.hf.removeNamedExpression(old.name, old.sheetId ? this.idToHf.get(old.sheetId) : undefined)));
+      } catch {
+        /* was never added */
+      }
+    }
+    this.names = names;
+    for (const n of names.filter((x) => this.validName(x))) {
+      try {
+        out.push(...this.collect(this.hf.addNamedExpression(n.name, '=' + n.formula, n.sheetId ? this.idToHf.get(n.sheetId) : undefined)));
+      } catch {
+        /* not a valid name or expression for the engine */
+      }
+    }
     return out;
   }
 

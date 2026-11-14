@@ -6,19 +6,37 @@
  */
 import { rpcServe, type RpcCtx } from '../engine/rpc';
 import { pauseBackground } from '../device/shared';
-import { parseXlsx, streamXlsx, type ParsedXlsx } from './xlsxRead';
+import { parseOoxml, streamOoxml, type ParsedOoxml } from './ooxml/read';
+import { writeOoxml, type WriteOptions } from './ooxml/write';
 import { parseWithSheetJs, streamSheetJs, sheetToCsv, type ParsedSheetJs } from './csv';
-import { writeXlsx } from './xlsxWrite';
-import type { AppMeta, CfEntry, LoadChunk, LoadResult, ParsedMeta } from './types';
+import type { LoadChunk, LoadResult, ParsedMeta } from './types';
 import type { IWorkbookData, ICellData } from '@univerjs/core';
 
-let parsed: { kind: 'x'; p: ParsedXlsx } | { kind: 's'; p: ParsedSheetJs } | null = null;
+let parsed: { kind: 'x'; p: ParsedOoxml } | { kind: 's'; p: ParsedSheetJs } | null = null;
+
+/** zip files start with "PK"; an .xlsx renamed to .xls (or the other way round) is read by content */
+const isZip = (buf: ArrayBuffer) => {
+  const b = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
+  return b[0] === 0x50 && b[1] === 0x4b;
+};
 
 const api = {
   async parse(buf: ArrayBuffer, name: string): Promise<ParsedMeta> {
     parsed = null;
-    if (/\.(xlsx|xlsm)$/i.test(name)) {
-      const p = await parseXlsx(buf, name);
+    if (/\.(xlsx|xlsm|xltx|xltm)$/i.test(name) || (isZip(buf) && !/\.ods$/i.test(name))) {
+      let p: ParsedOoxml;
+      try {
+        p = parseOoxml(buf, name);
+      } catch (e) {
+        const msg = String((e as Error)?.message ?? e);
+        if (/invalid zip|unexpected EOF|bad zip/i.test(msg) || !isZip(buf)) {
+          // password-protected workbooks are OLE containers, not zip files
+          const b = new Uint8Array(buf, 0, Math.min(8, buf.byteLength));
+          if (b[0] === 0xd0 && b[1] === 0xcf) throw new Error('This workbook is password-protected (encrypted). Remove the password in Excel first; Petak cannot open encrypted files.');
+          throw new Error('This file is damaged or is not an Excel workbook (' + msg + ').');
+        }
+        throw e;
+      }
       parsed = { kind: 'x', p };
       return p.meta;
     }
@@ -29,7 +47,7 @@ const api = {
 
   stream(chunkRows: number, ctx: RpcCtx): LoadResult {
     if (!parsed) throw new Error('Nothing parsed');
-    const gen: Generator<LoadChunk, LoadResult> = parsed.kind === 'x' ? streamXlsx(parsed.p, chunkRows) : streamSheetJs(parsed.p, chunkRows);
+    const gen: Generator<LoadChunk, LoadResult> = parsed.kind === 'x' ? streamOoxml(parsed.p, chunkRows) : streamSheetJs(parsed.p, chunkRows);
     let step = gen.next();
     while (!step.done) {
       ctx.progress(step.value);
@@ -38,14 +56,17 @@ const api = {
     }
     parsed = null; // free parser memory as soon as possible
     const res = step.value;
-    if (res.vba) ctx.transfer([res.vba]);
+    const transfer: Transferable[] = [];
+    if (res.vba) transfer.push(res.vba);
+    for (const m of (res as { media?: Array<{ bytes: ArrayBuffer }> }).media ?? []) transfer.push(m.bytes);
+    if (transfer.length) ctx.transfer(transfer);
     return res;
   },
 
-  async write(data: IWorkbookData, opts: { cf: CfEntry[]; meta: AppMeta | null; vba: ArrayBuffer | null; macroEnabled: boolean }, ctx: RpcCtx) {
-    const buf = await writeXlsx(data, opts, (d, t) => ctx.progress({ done: d, total: t }));
-    ctx.transfer([buf]);
-    return buf;
+  write(data: IWorkbookData, opts: WriteOptions, ctx: RpcCtx) {
+    const out = writeOoxml(data, opts, (d, t) => ctx.progress({ done: d, total: t }));
+    ctx.transfer([out.buf]);
+    return out;
   },
 
   csv(cellData: Record<number, Record<number, ICellData>>, sep: string) {
