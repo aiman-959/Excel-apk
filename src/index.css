@@ -229,3 +229,8 @@ html[data-load='1'] *, html[data-load='2'] * { animation-duration: 0s !important
 .fbar .kb { font-size: 12px; font-weight: 700; width: 40px; }
 .arg-hint { font-family: ui-monospace, 'Roboto Mono', monospace; font-size: 13px; }
 .arg-hint .cur { font-weight: 700; color: var(--accent-strong); }
+
+.scroll-ind { position: absolute; background: rgba(20, 83, 45, 0.45); border-radius: 3px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 4; }
+.scroll-ind.v { right: 2px; top: 0; width: 4px; }
+.scroll-ind.h { bottom: 2px; left: 0; height: 4px; }
+html[data-theme='dark'] .scroll-ind { background: rgba(187, 247, 208, 0.5); }

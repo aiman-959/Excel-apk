@@ -70,7 +70,15 @@ export async function start(name, profile = 'phone') {
   };
   const openFile = async (file) => {
     const before = await ev(() => window.__doc.wb.getId());
-    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-testid=open]')]);
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      (async () => {
+        await page.click('[data-testid=open]');
+        // unsaved changes: the app asks first
+        const dont = await page.waitForSelector('[data-testid=confirm-discard], [data-testid=confirm-ok]', { timeout: 1200 }).catch(() => null);
+        if (dont) await dont.click();
+      })(),
+    ]);
     await chooser.setFiles(file);
     const base = path.basename(file);
     await page.waitForFunction(([n, id]) => window.__doc.snapshot.file.name === n && window.__doc.wb.getId() !== id, [base, before], { timeout: 60000 });

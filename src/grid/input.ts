@@ -62,6 +62,7 @@ export class GridInput {
   private mode: Mode = { kind: 'idle' };
   private touches = new Map<number, { x: number; y: number }>();
   private synthetic = new WeakSet<Event>();
+  /** last tap: release time and place (a double tap = next touch-down within DOUBLE_MS of it) */
   private lastTap: { t: number; x: number; y: number; hit: GridHit } | null = null;
   private fling = 0;
   private raf = 0;
@@ -77,7 +78,7 @@ export class GridInput {
     this.hooks = hooks;
     this.guide = document.createElement('div');
     this.guide.className = 'resize-guide';
-    host.appendChild(this.guide);
+    (host.parentElement ?? host).appendChild(this.guide);
     const o = { capture: true, passive: false } as const;
     host.addEventListener('pointerdown', this.down, o);
     host.addEventListener('pointermove', this.move, o);
@@ -345,7 +346,7 @@ export class GridInput {
     if (m.kind === 'pending') {
       clearTimeout(m.timer);
       this.mode = { kind: 'idle' };
-      this.tap(m.x, m.y, m.hit);
+      this.tap(m.x, m.y, m.hit, m.t);
     } else if (m.kind === 'pan') {
       this.mode = { kind: 'idle' };
       // velocity over the last ~100 ms, in screen px / ms
@@ -401,9 +402,9 @@ export class GridInput {
   };
 
   // ------------------------------------------------------------------ gestures
-  private async tap(x: number, y: number, hit: GridHit) {
+  private async tap(x: number, y: number, hit: GridHit, downAt: number) {
     const now = performance.now();
-    const double = !!this.lastTap && now - this.lastTap.t < DOUBLE_MS && Math.hypot(this.lastTap.x - x, this.lastTap.y - y) < DOUBLE_PX;
+    const double = !!this.lastTap && downAt - this.lastTap.t < DOUBLE_MS && Math.hypot(this.lastTap.x - x, this.lastTap.y - y) < DOUBLE_PX;
     this.lastTap = double ? null : { t: now, x, y, hit };
     const sheetId = doc.wb.getActiveSheet().getSheetId();
     if (hit.picture) {
@@ -422,6 +423,7 @@ export class GridInput {
       // typing a formula: the tap picks a reference; anything else commits first
       if (await edit.gridTap(sheetId, hit.row, hit.col)) return;
     } else if (edit.get().editing) await edit.commit(null);
+    else edit.release(); // a tap on the grid closes the keyboard unless a formula is being typed
     if (double && hit.area === 'cell') {
       edit.start();
       return;

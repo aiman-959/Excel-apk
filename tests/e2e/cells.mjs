@@ -12,13 +12,15 @@ const t = await start('cells');
 const { page, step, ev, idle, val, fresh, openFile } = t;
 console.log('Petak e2e cells —', BASE);
 await fresh();
+await page.waitForTimeout(400);
 const T = await touch(page);
 const F = (f) => path.resolve('tests/fixtures/files', f);
 const sel = () => ev(() => { const r = window.__doc.wb.getActiveSheet().getActiveRange()?.getRange(); return r ? [r.startRow, r.startColumn, r.endRow, r.endColumn] : null; });
 const focus = () => ev(() => { const a = document.activeElement; return { tag: a?.tagName, testid: a?.dataset?.testid ?? '', editable: !!a && (a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') }; });
 /** screen position (page px) of the centre of a cell */
 const at = (ref) => ev((ref) => { const V = window.__view; const v = V.viewInfo(); const ws = window.__doc.wb.getActiveSheet(); const r = ws.getRange(ref).getRange(); const a = (acc, i) => (i <= 0 ? 0 : acc[i - 1]); const p0 = V.toScreen(v, a(v.colAcc, r.startColumn), a(v.rowAcc, r.startRow)); const p1 = V.toScreen(v, a(v.colAcc, r.endColumn + 1), a(v.rowAcc, r.endRow + 1)); const h = document.querySelector('[data-testid=grid]').getBoundingClientRect(); return { x: h.left + (p0.x + p1.x) / 2, y: h.top + (p0.y + p1.y) / 2, x0: h.left + p0.x, y0: h.top + p0.y, x1: h.left + p1.x, y1: h.top + p1.y }; }, ref);
-const tap = async (ref) => { const p = await at(ref); await T.tap(p.x, p.y); await page.waitForTimeout(120); };
+const tap = async (ref) => { const p = await at(ref); await T.tap(p.x, p.y); await page.waitForTimeout(200); };
+const gestureEnd = () => page.waitForFunction(() => !window.__doc.gesturing, null, { timeout: 10000 }).then(() => page.waitForTimeout(60));
 const dtap = async (ref) => { const p = await at(ref); await T.doubleTap(p.x, p.y); await page.waitForTimeout(200); };
 
 await step('single tap selects and never focuses an editable element', async () => {
@@ -70,7 +72,7 @@ await step('tapping another cell while typing text commits it (nothing is lost)'
 
 await step('typing a formula: tapping cells inserts references', async () => {
   await ev(() => { const ws = window.__doc.wb.getActiveSheet(); ws.getRange('A2:A4').setValues([[10], [20], [30]]); });
-  await dtap('E1');
+  await dtap('D1'); // (column E is off-screen on a phone)
   await page.keyboard.type('=SUM(');
   await tap('A2');
   assert.equal(await page.inputValue('[data-testid=formula-input]'), '=SUM(A2');
@@ -81,20 +83,20 @@ await step('typing a formula: tapping cells inserts references', async () => {
   await page.keyboard.type(')+');
   await tap('A2');
   assert.equal(await page.inputValue('[data-testid=formula-input]'), '=SUM(A3,A4)+A2');
-  assert.deepEqual(await sel(), [0, 4, 0, 4], 'selection stays on the edited cell');
+  assert.deepEqual(await sel(), [0, 3, 0, 3], 'selection stays on the edited cell');
   await page.click('[data-testid=formula-commit]');
   await idle();
-  assert.equal(await val('E1'), 60);
+  assert.equal(await val('D1'), 60);
 });
 
 await step('argument hint follows the caret', async () => {
-  await dtap('E2');
+  await dtap('D2');
   await page.keyboard.type('=IF(A2>5,');
   await page.waitForSelector('[data-testid=arg-hint]');
   assert.match(await page.textContent('[data-testid=arg-hint]'), /IF\(logical_test, value_if_true, \[value_if_false\]\)/);
   assert.equal(await page.textContent('[data-testid=arg-hint] .cur'), ', value_if_true');
   await page.keyboard.press('Escape');
-  assert.equal(await val('E2'), null, 'Escape cancels without writing');
+  assert.equal(await val('D2'), null, 'Escape cancels without writing');
 });
 
 await step('number cells open the numeric keyboard, text cells the normal one', async () => {
@@ -111,8 +113,8 @@ await step('drag scrolls with cached bitmaps (few renders), selection unchanged'
   await tap('B6');
   const before = await sel();
   const g = await (await page.$('[data-testid=grid]')).boundingBox();
-  await T.drag({ x: g.x + 200, y: g.y + 520 }, { x: g.x + 200, y: g.y + 160 }, { steps: 24, stepMs: 12 });
-  await page.waitForTimeout(500);
+  await T.drag({ x: g.x + 200, y: g.y + 520 }, { x: g.x + 200, y: g.y + 160 }, { steps: 24, stepMs: 12, settle: 180 });
+  await gestureEnd();
   const s = await ev(() => window.__view.mainOrigin(window.__view.viewInfo()));
   assert.ok(s.y > 300, 'scrolled down: ' + JSON.stringify(s));
   assert.deepEqual(await sel(), before);
@@ -125,10 +127,10 @@ await step('fling keeps moving after the finger lifts, then settles sharply', as
   const g = await (await page.$('[data-testid=grid]')).boundingBox();
   const y0 = (await ev(() => window.__view.mainOrigin(window.__view.viewInfo()))).y;
   await T.fling({ x: g.x + 200, y: g.y + 500 }, { x: g.x + 200, y: g.y + 300 });
-  const y1 = await ev(() => window.__view.mainOrigin(window.__view.viewInfo()).y);
-  await page.waitForTimeout(1800);
+  assert.equal(await ev(() => window.__doc.gesturing), true, 'still moving right after the finger lifts');
+  await gestureEnd();
   const y2 = (await ev(() => window.__view.mainOrigin(window.__view.viewInfo()))).y;
-  assert.ok(y2 > y0 + 200 / 1 + 80, `momentum: ${y0} -> ${y1} -> ${y2}`);
+  assert.ok(y2 > y0 + 200 + 80, `momentum carried the sheet further than the finger did: ${y0} -> ${y2}`);
   assert.equal(await ev(() => getComputedStyle(document.querySelector('.grid-compositor')).display), 'none');
 });
 
@@ -140,7 +142,8 @@ await step('pinch zooms around the fingers and redraws once at the end', async (
   const focal = { x: g.x + 220, y: g.y + 330 };
   const under = await ev(([x, y]) => { const V = window.__view; const h = document.querySelector('[data-testid=grid]').getBoundingClientRect(); const s = V.toSheet(V.viewInfo(), x - h.left, y - h.top); return [s.x, s.y]; }, [focal.x, focal.y]);
   await T.pinch(focal, 120, 216, { steps: 18 });
-  await page.waitForTimeout(400);
+  await gestureEnd();
+  await page.waitForTimeout(300);
   const z1 = await ev(() => window.__doc.wb.getActiveSheet().getZoom());
   assert.ok(Math.abs(z1 / z0 - 1.8) < 0.05, `zoom ${z0} -> ${z1}`);
   const after = await ev(([x, y]) => { const V = window.__view; const h = document.querySelector('[data-testid=grid]').getBoundingClientRect(); const s = V.toSheet(V.viewInfo(), x - h.left, y - h.top); return [s.x, s.y]; }, [focal.x, focal.y]);
@@ -152,6 +155,7 @@ await step('pinch zooms around the fingers and redraws once at the end', async (
 
 await step('drag a column header edge to resize; double tap the edge to autofit', async () => {
   await fresh();
+  await page.waitForTimeout(400);
   await ev(() => window.__doc.wb.getActiveSheet().getRange('B1').setValue('a much longer text than the column'));
   const b = await at('B1');
   const g = await (await page.$('[data-testid=grid]')).boundingBox();

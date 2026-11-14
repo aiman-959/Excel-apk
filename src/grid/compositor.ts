@@ -62,6 +62,9 @@ export class Compositor {
   /** pinch: scale and translation of the whole picture around a focal point */
   private pinch: { k: number; fx: number; fy: number; dx: number; dy: number } | null = null;
   stats: CompositorStats = { renders: 0, frames: 0, renderMs: 0 };
+  private barV = document.createElement('div');
+  private barH = document.createElement('div');
+  private barTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(host: HTMLElement, maxBlocks = 6) {
     this.maxBlocks = maxBlocks;
@@ -76,7 +79,11 @@ export class Compositor {
       }
       this.root.appendChild(clip);
     }
-    host.appendChild(this.root);
+    // Univer owns the children of its container (it re-renders them): overlays live beside it
+    (host.parentElement ?? host).appendChild(this.root);
+    this.barV.className = 'scroll-ind v';
+    this.barH.className = 'scroll-ind h';
+    (host.parentElement ?? host).append(this.barV, this.barH);
   }
 
   get position() {
@@ -99,7 +106,15 @@ export class Compositor {
     this.v0 = v;
     this.stats = { renders: 0, frames: 0, renderMs: 0 };
     // Univer's own scroll bars are painted inside the canvas and would be copied into every block
-    for (const key of ['viewMain', 'viewMainLeft', 'viewMainTop']) (unit.scene.getViewport(key) as unknown as { removeScrollBar?: () => void } | undefined)?.removeScrollBar?.();
+    // (the scroll bar object must stay: Univer scrolls through it. Only its painting is switched off;
+    // Petak shows its own thin indicators while a finger scrolls.)
+    for (const key of ['viewMain', 'viewMainLeft', 'viewMainTop']) {
+      const sb = (unit.scene.getViewport(key) as unknown as { getScrollBar?: () => { render: unknown; __quiet?: boolean } | null } | undefined)?.getScrollBar?.();
+      if (sb && !sb.__quiet) {
+        sb.__quiet = true;
+        sb.render = () => {};
+      }
+    }
     unit.scene.makeDirty(true);
     unit.scene.render();
     const o = mainOrigin(v);
@@ -217,6 +232,27 @@ export class Compositor {
     this.topMover.style.transform = `translate3d(${dx}px,0,0)`;
     this.leftMover.style.transform = `translate3d(0,${dy}px,0)`;
     this.stats.frames++;
+    this.indicators();
+  }
+
+  /** Thin scroll position indicators (Univer's own scroll bars are not painted on touch devices). */
+  private indicators() {
+    const v = this.v0!;
+    const trackH = v.height - v.headerH - v.frozenH - 8;
+    const trackW = v.width - v.headerW - v.frozenW - 8;
+    const spanY = this.max.y - this.min.y + this.bh;
+    const spanX = this.max.x - this.min.x + this.bw;
+    const hV = Math.max(28, (this.bh / spanY) * trackH);
+    const wH = Math.max(28, (this.bw / spanX) * trackW);
+    const fy = this.max.y > this.min.y ? (this.cur.y - this.min.y) / (this.max.y - this.min.y) : 0;
+    const fx = this.max.x > this.min.x ? (this.cur.x - this.min.x) / (this.max.x - this.min.x) : 0;
+    this.barV.style.cssText = `opacity:${this.max.y > this.min.y + 1 ? 1 : 0};height:${hV}px;transform:translate3d(0,${v.headerH + v.frozenH + 4 + fy * (trackH - hV)}px,0)`;
+    this.barH.style.cssText = `opacity:${this.max.x > this.min.x + 1 ? 1 : 0};width:${wH}px;transform:translate3d(${v.headerW + v.frozenW + 4 + fx * (trackW - wH)}px,0,0)`;
+    clearTimeout(this.barTimer);
+    this.barTimer = setTimeout(() => {
+      this.barV.style.opacity = '0';
+      this.barH.style.opacity = '0';
+    }, 900);
   }
 
   /** Make sure the blocks under the visible window exist; render at most one missing block per call. */
@@ -261,6 +297,14 @@ export class Compositor {
     if (!this.active) return this.stats;
     const v0 = this.v0!;
     const unit = this.unit!;
+    const hide = () => {
+      this.root.style.display = 'none';
+      this.root.style.transform = '';
+      this.pinch = null;
+      this.clear();
+      this.cornerClip.replaceChildren();
+    };
+    this.active = false;
     try {
       if (this.pinch && Math.abs(this.pinch.k - 1) > 0.01) {
         const p = this.pinch;
@@ -272,23 +316,41 @@ export class Compositor {
         const hh = v0.headerH / v0.zoom;
         const px = this.cur.x + (p.fx - v0.headerW - v0.frozenW) / v0.zoom;
         const py = this.cur.y + (p.fy - v0.headerH - v0.frozenH) / v0.zoom;
+        // keep that point under the (moved) focal point at the new zoom
+        const ox = Math.max(fzW, px - (p.fx + p.dx - (hw + fzW) * z1) / z1);
+        const oy = Math.max(fzH, py - (p.fy + p.dy - (hh + fzH) * z1) / z1);
         const wb = doc.wb;
         doc.api.executeCommand('sheet.operation.set-zoom-ratio', { zoomRatio: z1, unitId: wb.getId(), subUnitId: wb.getActiveSheet().getSheetId() });
-        const v1 = viewInfo() ?? v0;
-        // keep that point under the (moved) focal point at the new zoom
-        const ox = px - (p.fx + p.dx - (hw + fzW) * z1) / z1;
-        const oy = py - (p.fy + p.dy - (hh + fzH) * z1) / z1;
-        scrollTo({ ...v1, zoom: z1, frozenW: fzW * z1, frozenH: fzH * z1 }, Math.max(fzW, ox), Math.max(fzH, oy));
-      } else scrollTo(v0, this.cur.x, this.cur.y);
-      unit.scene.makeDirty(true);
-      unit.scene.render();
-    } finally {
-      this.root.style.display = 'none';
-      this.root.style.transform = '';
-      this.active = false;
-      this.pinch = null;
-      this.clear();
-      this.cornerClip.replaceChildren();
+        // Univer lays the sheet out for the new zoom and resets its scroll while doing so:
+        // place the scroll once the new zoom is in effect, and only then show the result
+        // (it also re-applies frozen panes a frame later, which resets the scroll again)
+        let tries = 0;
+        let stable = 0;
+        const settle = () => {
+          const v1 = viewInfo();
+          if (v1 && Math.abs(v1.zoom - z1) < 0.001) {
+            const o = mainOrigin(v1);
+            if (Math.abs(o.x - ox) < 2 && Math.abs(o.y - oy) < 2) stable++;
+            else {
+              stable = 0;
+              scrollTo(v1, ox, oy);
+              unit.scene.makeDirty(true);
+              unit.scene.render();
+            }
+          }
+          if (stable >= 3 || ++tries >= 12) return hide();
+          requestAnimationFrame(settle);
+        };
+        settle();
+      } else {
+        scrollTo(v0, this.cur.x, this.cur.y);
+        unit.scene.makeDirty(true);
+        unit.scene.render();
+        hide();
+      }
+    } catch (e) {
+      hide();
+      throw e;
     }
     return this.stats;
   }

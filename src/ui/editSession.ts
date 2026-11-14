@@ -73,7 +73,17 @@ export const edit = {
     }
   },
   setText(text: string) {
+    if (!st.editing) {
+      // typing into the focused bar starts a session on the active cell
+      const ws = doc.wb.getActiveSheet();
+      const cell = ws.getActiveCell();
+      set({ sheetId: ws.getSheetId(), row: cell?.getRow() ?? 0, col: cell?.getColumn() ?? 0 });
+    }
     set({ text, liveRef: null, editing: true });
+  },
+  /** Give up keyboard focus when nothing is being edited. */
+  release() {
+    if (!st.editing && inputEl && document.activeElement === inputEl) inputEl.blur();
   },
   setNumeric(numeric: boolean) {
     set({ numeric });

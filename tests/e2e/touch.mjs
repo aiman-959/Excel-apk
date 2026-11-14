@@ -12,9 +12,12 @@ export async function touch(page) {
       await wait(60);
     },
     async doubleTap(x, y) {
-      await this.tap(x, y);
-      await wait(60);
-      await this.tap(x, y);
+      await send('touchStart', [{ x, y }]);
+      await send('touchEnd', []);
+      await wait(50);
+      await send('touchStart', [{ x, y }]);
+      await send('touchEnd', []);
+      await wait(80);
     },
     async longPress(x, y, ms = 700) {
       await send('touchStart', [{ x, y }]);
@@ -23,7 +26,7 @@ export async function touch(page) {
       await wait(60);
     },
     /** press, drag, release; `during` runs half-way with the finger still down */
-    async drag(a, b, { steps = 12, stepMs = 16, hold = 0, during } = {}) {
+    async drag(a, b, { steps = 12, stepMs = 16, hold = 0, settle = 0, during } = {}) {
       await send('touchStart', [a]);
       if (hold) await wait(hold);
       for (let i = 1; i <= steps; i++) {
@@ -31,6 +34,7 @@ export async function touch(page) {
         await wait(stepMs);
         if (during && i === Math.ceil(steps / 2)) await during();
       }
+      if (settle) await wait(settle); // finger rests before lifting: no momentum
       await send('touchEnd', []);
       await wait(60);
     },
