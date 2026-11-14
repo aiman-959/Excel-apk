@@ -144,7 +144,7 @@ export interface ParsedMeta {
 /** Payload streamed back during load. */
 export type LoadChunk =
   | { kind: 'sheetStart'; index: number; sheet: Omit<IWorksheetData, 'cellData'> }
-  | { kind: 'rows'; index: number; cellData: Record<number, Record<number, ICellData>>; done: number; total: number };
+  | { kind: 'rows'; index: number; cellData: Record<number, Record<number, ICellData>>; done: number; total: number; /** row heights / hidden / styles, sent with the last chunk of a sheet */ rowData?: Record<number, Record<string, unknown>> };
 export interface LoadResult {
   styles: Record<string, IStyleData>;
   sheetOrder: string[];

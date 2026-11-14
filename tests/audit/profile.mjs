@@ -1,0 +1,40 @@
+// CPU profile of scroll / pinch with 4x CPU throttling (approximates a mid phone core).
+import { chromium, devices } from 'playwright';
+import path from 'node:path';
+import { touch } from '../e2e/touch.mjs';
+const BASE = process.env.BASE_URL ?? 'http://localhost:4173/';
+const file = process.argv[2] ?? 'tests/fixtures/files/roster.xlsx';
+const rate = +(process.env.THROTTLE ?? 4);
+const b = await chromium.launch();
+const ctx = await b.newContext({ ...devices['Pixel 7'], deviceScaleFactor: 2.75 });
+const page = await ctx.newPage();
+await page.goto(BASE + '?fresh&tier=high');
+await page.waitForFunction(() => window.__doc?.snapshot?.sheets?.length > 0);
+const t = await touch(page);
+const [ch] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-testid=open]')]);
+await ch.setFiles(path.resolve(file));
+await page.waitForFunction((n) => window.__doc.snapshot.file.name === n, path.basename(file), { timeout: 120000 });
+await page.waitForTimeout(1500);
+await t.cdp.send('Emulation.setCPUThrottlingRate', { rate });
+const run = async (label, gesture) => {
+  await t.cdp.send('Profiler.enable');
+  await t.cdp.send('Profiler.setSamplingInterval', { interval: 500 });
+  await page.evaluate(() => { window.__fr = []; let last = performance.now(); window.__m = true; const f = (t) => { window.__fr.push(t - last); last = t; if (window.__m) requestAnimationFrame(f); }; requestAnimationFrame(f); });
+  await t.cdp.send('Profiler.start');
+  await gesture();
+  await page.waitForTimeout(400);
+  const { profile } = await t.cdp.send('Profiler.stop');
+  const fr = await page.evaluate(() => { window.__m = false; return window.__fr.slice(1); });
+  const avg = fr.reduce((a, b) => a + b, 0) / fr.length;
+  // self time per function
+  const self = new Map(); const dt = profile.timeDeltas; const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+  profile.samples.forEach((id, i) => { const n = byId.get(id); const k = (n.callFrame.functionName || '(anon)') + ' ' + n.callFrame.url.split('/').pop().slice(0, 18) + ':' + n.callFrame.lineNumber; self.set(k, (self.get(k) ?? 0) + (dt[i] ?? 0) / 1000); });
+  const total = [...self.values()].reduce((a, b) => a + b, 0);
+  const top = [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14);
+  console.log(`\n== ${label}: ${fr.length} frames, avg ${avg.toFixed(1)} ms (${(1000 / avg).toFixed(0)} fps), >20ms ${fr.filter((d) => d > 20).length}, >50ms ${fr.filter((d) => d > 50).length}, worst ${Math.max(...fr).toFixed(0)} ms`);
+  for (const [k, v] of top) console.log(`   ${v.toFixed(0).padStart(5)} ms ${((v / total) * 100).toFixed(0).padStart(3)}%  ${k}`);
+};
+await run('pan (drag 450px, 40 steps)', () => t.drag({ x: 220, y: 620 }, { x: 220, y: 170 }, { steps: 40, stepMs: 12 }));
+await run('fling', async () => { await t.fling({ x: 220, y: 620 }, { x: 220, y: 320 }); await page.waitForTimeout(1200); });
+await run('pinch 120->300', () => t.pinch({ x: 220, y: 400 }, 120, 300, { steps: 30 }));
+await b.close();

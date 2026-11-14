@@ -122,17 +122,23 @@ const openViaPicker = async (name) => {
   const ok = await page.$('[data-testid=confirm-ok]');
   if (ok) await ok.click();
   await sleep(3000);
-  let r = tapText(name);
+  let r;
+  for (let i = 0; i < 5; i++) {
+    r = tapText(name);
+    if (r === true) break;
+    await sleep(1500);
+  }
   if (r !== true) {
     // not in "Recent": open the Downloads root from the drawer
-    sh('input keyevent 82');
-    const pkgOnTop = sh('dumpsys window | grep mCurrentFocus');
     tapText('Show roots', { exact: false });
-    await sleep(800);
+    await sleep(1000);
     tapText('Downloads');
     await sleep(1500);
     r = tapText(name);
-    if (r !== true) return { picker: pkgOnTop.trim(), ...r };
+    if (r !== true) {
+      sh('input keyevent 4');
+      return { picker: sh('dumpsys window | grep mCurrentFocus').trim(), ...r };
+    }
   }
   await sleep(6000);
   return page.evaluate(() => [window.__doc.snapshot.file.name, window.__doc.snapshot.sheets.map((s) => s.name)]);
@@ -172,3 +178,4 @@ screencap('open-with');
 await R.check('resolve activities for .xls VIEW', () => sh('cmd package query-activities -a android.intent.action.VIEW -t application/vnd.ms-excel | grep -c petak || true').trim());
 R.save();
 console.log('device audit finished');
+process.exit(0);
