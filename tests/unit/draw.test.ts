@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { PX_PER_MM, align, bounds, defaultSnaps, dimensionText, distribute, emptyDrawing, fromUnit, hitTest, rulerStep, setBox, smartGuides, snap, toUnit, type Shape } from '../../src/draw/geometry';
+import {
+  PX_PER_MM, SNAP_PX, align, angleBetween, angleOf, angleParts, bounds, cellRectFor, defaultSnaps, dimensionText, distribute, emptyDrawing, fromUnit, hitTest, lineFromLengthAngle,
+  refreshAngles, resolveAngle, rulerStep, setBox, smartGuides, snap, snapAngle, toUnit, type Shape,
+} from '../../src/draw/geometry';
 import { toDxf, toPdf, toSvg } from '../../src/draw/exporters';
 
 const rect = (id: string, x: number, y: number, w: number, h: number, extra: Partial<Shape> = {}): Shape => ({
@@ -31,9 +34,11 @@ describe('snapping', () => {
   const base = { toggles: defaultSnaps(), tol: 6, grid, unit: 'mm' as const, zoom: 1, others: [] as Shape[] };
   it('snaps to cell corners and edges', () => {
     expect(snap({ x: 90, y: 23 }, base).p).toEqual({ x: 88, y: 24 });
-    const r = snap({ x: 130, y: 46 }, base);
-    expect(r.p).toEqual({ x: 130, y: 48 });
+    const r = snap({ x: 120, y: 46 }, base); // 12 px from the cell centre: only the edge is near
+    expect(r.p).toEqual({ x: 120, y: 48 });
     expect(r.kind).toBe('cell edge');
+    // on the edge, near the middle of the cell: the edge midpoint
+    expect(snap({ x: 130, y: 46 }, base).p).toEqual({ x: 132, y: 48 });
   });
   it('snaps to cell centres when enabled', () => {
     const r = snap({ x: 130, y: 35 }, { ...base, toggles: { ...defaultSnaps(), cellEdges: false, cellCentres: true } });
@@ -52,7 +57,7 @@ describe('snapping', () => {
     expect(r45.p.x).toBeCloseTo(r45.p.y);
   });
   it('every snap source can be switched off', () => {
-    const off = { cellEdges: false, cellCentres: false, objects: false, ruler: false, angle: false };
+    const off = { enabled: true, cellEdges: false, cellCentres: false, objects: false, ruler: false, angle: false, angle15: false };
     expect(snap({ x: 90, y: 23 }, { ...base, toggles: off }).p).toEqual({ x: 90, y: 23 });
   });
   it('smart guides align edges', () => {
@@ -120,5 +125,158 @@ describe('exporters', () => {
   it('hidden layers are not exported', () => {
     const h = { ...d, layers: [{ ...d.layers[0], visible: false }] };
     expect(toSvg(h)).not.toContain('<rect');
+  });
+});
+
+const line = (id: string, a: [number, number], b: [number, number], extra: Partial<Shape> = {}): Shape => ({
+  id, type: 'line', x: 0, y: 0, w: 0, h: 0, rotation: 0, stroke: '#000', fill: 'none', strokeWidth: 1, layerId: 'L1', points: [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }], ...extra,
+});
+
+describe('angles', () => {
+  it('angleOf is counter-clockwise from +x, 0–360 (screen y down)', () => {
+    const o = { x: 0, y: 0 };
+    expect(angleOf(o, { x: 10, y: 0 })).toBeCloseTo(0);
+    expect(angleOf(o, { x: 0, y: -10 })).toBeCloseTo(90);
+    expect(angleOf(o, { x: -10, y: 0 })).toBeCloseTo(180);
+    expect(angleOf(o, { x: 0, y: 10 })).toBeCloseTo(270);
+    expect(angleOf(o, { x: 10, y: -10 })).toBeCloseTo(45);
+  });
+  it('lineFromLengthAngle is the inverse of angleOf / length', () => {
+    const a = { x: 5, y: 7 };
+    for (const deg of [0, 30, 45, 60, 135, 210, 300]) {
+      const b = lineFromLengthAngle(a, 50, deg);
+      expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(50);
+      expect(angleOf(a, b)).toBeCloseTo(deg);
+    }
+  });
+  it('snap table: 0/90/180/270 within 6°, 30°/45° multiples within 4°, 15° optional', () => {
+    const table: Array<[number, number | null, boolean?]> = [
+      [5.5, 0], [6.5, null], [84.5, 90], [354, 0], [176, 180], [264.2, 270],
+      [27, 30], [33.9, 30], [34.5, null], [41.5, 45], [48.9, 45], [57, 60], [63.5, 60], [118, 120], [138, 135], [150.5, 150], [225, 225], [301, 300], [315, 315],
+      [16, null], [16, 15, true], [19, null, true], [74, 75, true],
+    ];
+    for (const [deg, want, f15] of table) {
+      const r = snapAngle(deg, { angle15: !!f15 });
+      if (want === null) expect(r.locked, `${deg}° stays free`).toBe(false);
+      else expect([r.locked, r.deg], `${deg}° → ${want}°`).toEqual([true, want]);
+    }
+  });
+  it('a dragged line locks to 60° and keeps its length', () => {
+    const from = { x: 100, y: 100 };
+    const to = lineFromLengthAngle(from, 80, 62.5);
+    const r = snap(to, { toggles: { ...defaultSnaps(), cellEdges: false, cellCentres: false }, tol: SNAP_PX, unit: 'mm', zoom: 1, others: [], from });
+    expect(r.angle).toBe(60);
+    expect(r.kind).toBe('60°');
+    expect(angleOf(from, r.p)).toBeCloseTo(60);
+    expect(Math.hypot(r.p.x - from.x, r.p.y - from.y)).toBeCloseTo(80);
+  });
+  it('angles can snap relative to a base direction (the first arm of an angle)', () => {
+    const from = { x: 0, y: 0 };
+    const to = lineFromLengthAngle(from, 100, -5 + 62);
+    const r = snap(to, { toggles: { ...defaultSnaps(), cellEdges: false, cellCentres: false }, tol: SNAP_PX, unit: 'mm', zoom: 1, others: [], from, angleBase: 355 });
+    expect(r.kind).toBe('60°');
+    expect(angleOf(from, r.p)).toBeCloseTo(55);
+  });
+  it('angle between two lines, as a live dimension', () => {
+    const pts = angleBetween([{ x: 0, y: 100 }, { x: 100, y: 100 }], [{ x: 0, y: 100 }, { x: 50, y: 100 - 50 * Math.sqrt(3) }])!;
+    expect(pts[1]).toEqual({ x: 0, y: 100 });
+    expect(angleParts(pts)!.deg).toBeCloseTo(60);
+    expect(angleBetween([{ x: 0, y: 0 }, { x: 10, y: 0 }], [{ x: 0, y: 5 }, { x: 10, y: 5 }])).toBeNull();
+    // the angle follows its lines
+    const l1 = line('a', [0, 100], [100, 100]);
+    const l2 = line('b', [0, 100], [100, 0]);
+    const ang: Shape = { ...line('g', [0, 0], [0, 0]), type: 'angle', points: [], refs: ['a', 'b'] };
+    const [, , g] = refreshAngles([l1, l2, ang]);
+    expect(angleParts(g.points!)!.deg).toBeCloseTo(45);
+    const turned = { ...l2, points: [{ x: 0, y: 100 }, { x: 0, y: 0 }] };
+    expect(angleParts(resolveAngle(g, (id) => (id === 'a' ? l1 : turned))!)!.deg).toBeCloseTo(90);
+    // a deleted line leaves a plain three-point angle
+    const [, alone] = refreshAngles([l1, g]);
+    expect(alone.refs).toBeUndefined();
+    expect(alone.points).toHaveLength(3);
+  });
+});
+
+describe('snap priority and distance', () => {
+  // cells 88 × 24: corner (88, 24), centre of B2 (132, 36)
+  const opts = (zoom: number, others: Shape[] = []) => ({ toggles: defaultSnaps(), tol: SNAP_PX / zoom, grid, unit: 'mm' as const, zoom, others });
+  it('the snap distance is 12 screen px at every zoom', () => {
+    for (const zoom of [0.5, 1, 2, 4]) {
+      const near = snap({ x: 88 + 11 / zoom, y: 24 }, opts(zoom));
+      expect(near.p.x, `zoom ${zoom}: 11 px away snaps`).toBeCloseTo(88);
+      const far = snap({ x: 88 + 13 / zoom, y: 30 + 13 / zoom }, { ...opts(zoom), toggles: { ...defaultSnaps(), cellCentres: false } });
+      expect(far.kind === 'cell corner', `zoom ${zoom}: 13 px away does not`).toBe(false);
+    }
+  });
+  it('cell corners beat cell centres, centres beat objects, by 4 screen px each', () => {
+    for (const zoom of [0.5, 1, 3]) {
+      // an object corner exactly under the finger, a cell corner 3 screen px away: the corner wins
+      const obj = rect('o', 88 + 3 / zoom, 24, 20, 20);
+      expect(snap({ x: 88 + 3 / zoom, y: 24 }, opts(zoom, [obj])).kind, `zoom ${zoom}`).toBe('cell corner');
+      // 5 screen px away the corner still wins (score 5 against 0 + 8)
+      expect(snap({ x: 88 + 5 / zoom, y: 24 }, opts(zoom, [rect('o', 88 + 5 / zoom, 24, 20, 20)])).kind).toBe('cell corner');
+      // 9 screen px away the object under the finger wins
+      expect(snap({ x: 88 + 9 / zoom, y: 24 }, opts(zoom, [rect('o', 88 + 9 / zoom, 24, 20, 20)])).kind, `zoom ${zoom}`).toBe('object');
+    }
+    // a centre 1 px away beats a corner 6 px away (1 + 4 < 6)
+    const g2 = { colAcc: [12, 24, 36], rowAcc: [12, 24, 36] }; // small cells: centre (6, 6), corner (12, 12)
+    expect(snap({ x: 7, y: 6 }, { ...opts(1), grid: g2 }).kind).toBe('cell centre');
+  });
+  it('the magnet switches everything off', () => {
+    expect(snap({ x: 90, y: 23 }, { ...opts(1), toggles: { ...defaultSnaps(), enabled: false } }).p).toEqual({ x: 90, y: 23 });
+  });
+});
+
+describe('fit to cells', () => {
+  it('covers the start cell and the current cell', () => {
+    expect(cellRectFor({ x: 130, y: 30 }, { x: 140, y: 40 }, grid)).toEqual({ x: 88, y: 24, w: 88, h: 24 });
+    expect(cellRectFor({ x: 92, y: 75 }, { x: 261, y: 30 }, grid)).toEqual({ x: 88, y: 24, w: 176, h: 72 });
+    // backwards drag gives the same range
+    expect(cellRectFor({ x: 261, y: 30 }, { x: 92, y: 75 }, grid)).toEqual({ x: 88, y: 24, w: 176, h: 72 });
+    expect(cellRectFor({ x: 1, y: 1 }, { x: 2, y: 2 }, grid)).toEqual({ x: 0, y: 0, w: 88, h: 24 });
+  });
+});
+
+describe('hit tolerance', () => {
+  it('unfilled shapes: outline only outside drawing mode, interior inside it', () => {
+    const d = emptyDrawing();
+    d.shapes.push(rect('r', 100, 100, 200, 100));
+    expect(hitTest(d, { x: 200, y: 150 }, 16, { interior: false })).toBeNull();
+    expect(hitTest(d, { x: 200, y: 150 }, 16)?.id).toBe('r');
+    expect(hitTest(d, { x: 200, y: 112 }, 16, { interior: false })?.id).toBe('r'); // 12 px inside the edge
+    expect(hitTest(d, { x: 200, y: 85 }, 16, { interior: false })?.id).toBe('r'); // 15 px outside
+    expect(hitTest(d, { x: 200, y: 80 }, 16, { interior: false })).toBeNull();
+    d.shapes[0] = { ...d.shapes[0], fill: '#ff0000' };
+    expect(hitTest(d, { x: 200, y: 150 }, 16, { interior: false })?.id).toBe('r');
+  });
+  it('lines are picked within the tolerance, closed polylines inside', () => {
+    const d = emptyDrawing();
+    d.shapes.push(line('l', [0, 0], [100, 0]));
+    expect(hitTest(d, { x: 50, y: 15 }, 16)?.id).toBe('l');
+    expect(hitTest(d, { x: 50, y: 18 }, 16)).toBeNull();
+    d.shapes.push({ ...line('p', [200, 0], [300, 0]), type: 'polyline', closed: true, points: [{ x: 200, y: 0 }, { x: 300, y: 0 }, { x: 250, y: 100 }] });
+    expect(hitTest(d, { x: 250, y: 40 }, 4)?.id).toBe('p');
+    expect(hitTest(d, { x: 250, y: 40 }, 4, { interior: false })).toBeNull();
+  });
+});
+
+describe('exporters: closed polylines and angles', () => {
+  const d = emptyDrawing();
+  d.shapes.push({ ...line('p', [0, 0], [100, 0]), type: 'polyline', closed: true, fill: '#ffcc00', points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 80 }] });
+  d.shapes.push({ ...line('g', [0, 0], [0, 0]), type: 'angle', points: [{ x: 300, y: 100 }, { x: 200, y: 100 }, { x: 200, y: 0 }] });
+  it('SVG: polygon and the angle label', () => {
+    const svg = toSvg(d);
+    expect(svg).toMatch(/<polygon points="0,0 100,0 50,80" stroke="#000" stroke-width="1" fill="#ffcc00"/);
+    expect(svg).toContain('>90°</text>');
+  });
+  it('DXF: the closing segment and the angle text', () => {
+    const dxf = toDxf(d);
+    expect(dxf.split('\nLINE\n').length - 1).toBeGreaterThanOrEqual(3 + 2 + 6);
+    expect(dxf).toContain('90%%d');
+  });
+  it('PDF: a filled closed path and the degree sign', () => {
+    const pdf = new TextDecoder('latin1').decode(toPdf(d));
+    expect(pdf).toMatch(/ h\nB\n/);
+    expect(pdf).toContain('(90\\260) Tj');
   });
 });

@@ -2,7 +2,7 @@
  * Export drawings at true scale: SVG (mm units), DXF (R12 ASCII, millimetres) and PDF
  * (vector, page sized to the drawing). Pure functions — unit-tested.
  */
-import { PX_PER_MM, bounds, dimensionText, isLinear, length, rotate, unionBox, type Drawing, type Pt, type Shape, type Unit } from './geometry';
+import { PX_PER_MM, angleParts, bounds, dimensionText, fmtAngle, isLinear, length, rotate, unionBox, type Drawing, type Pt, type Shape, type Unit } from './geometry';
 
 const MARGIN = 10 * PX_PER_MM; // 10 mm around the drawing
 const visibleShapes = (d: Drawing) => {
@@ -41,6 +41,19 @@ export function dimensionParts(s: Shape): { line: [Pt, Pt]; ticks: Array<[Pt, Pt
   };
 }
 
+/** Angle dimension: arms (when it does not measure two lines), the arc as a polyline, the label. */
+export function angleExportParts(s: Shape): { arms: Pt[] | null; arc: Pt[]; label: Pt; text: string } | null {
+  const a = s.points && angleParts(s.points);
+  if (!a || !s.points) return null;
+  const n = Math.max(6, Math.ceil(Math.abs(a.sweep) / (Math.PI / 36)));
+  const arc: Pt[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = a.start + (a.sweep * i) / n;
+    arc.push({ x: a.v.x + Math.cos(t) * a.r, y: a.v.y + Math.sin(t) * a.r });
+  }
+  return { arms: s.refs ? null : s.points, arc, label: a.label, text: fmtAngle(a.deg) };
+}
+
 // ---------------------------------------------------------------- SVG
 export function toSvg(d: Drawing, unit: Unit = 'mm'): string {
   const shapes = visibleShapes(d);
@@ -66,7 +79,8 @@ export function toSvg(d: Drawing, unit: Unit = 'mm'): string {
       case 'line':
       case 'polyline':
       case 'arrow':
-        body.push(`<polyline points="${pts(s.points ?? [])}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`);
+        if (s.closed && s.type === 'polyline') body.push(`<polygon points="${pts(s.points ?? [])}" ${common} stroke-linejoin="round"/>`);
+        else body.push(`<polyline points="${pts(s.points ?? [])}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`);
         if (s.type === 'arrow' && s.points && s.points.length >= 2) {
           const [h1, h2] = arrowHead(s.points[s.points.length - 2], s.points[s.points.length - 1], 6 + s.strokeWidth * 2);
           body.push(`<polygon points="${pts([h1, s.points[s.points.length - 1], h2])}" fill="${s.stroke}"/>`);
@@ -78,6 +92,15 @@ export function toSvg(d: Drawing, unit: Unit = 'mm'): string {
         body.push(`<g stroke="${s.stroke}" stroke-width="${s.strokeWidth}"><line x1="${n2(p.line[0].x)}" y1="${n2(p.line[0].y)}" x2="${n2(p.line[1].x)}" y2="${n2(p.line[1].y)}"/>${p.ticks.map((t) => `<line x1="${n2(t[0].x)}" y1="${n2(t[0].y)}" x2="${n2(t[1].x)}" y2="${n2(t[1].y)}"/>`).join('')}</g>`);
         const a = ((p.angle + 90) % 180) - 90; // keep text upright
         body.push(`<text x="${n2(p.mid.x)}" y="${n2(p.mid.y - 4)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="${s.stroke}" transform="rotate(${n2(a)} ${n2(p.mid.x)} ${n2(p.mid.y)})">${esc(dimensionText(s, unit))}</text>`);
+        break;
+      }
+      case 'angle': {
+        const p = angleExportParts(s);
+        if (!p) break;
+        const line = (q: Pt[]) => `<polyline points="${pts(q)}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" fill="none" stroke-linejoin="round"/>`;
+        if (p.arms) body.push(line(p.arms));
+        body.push(line(p.arc));
+        body.push(`<text x="${n2(p.label.x)}" y="${n2(p.label.y + 4)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="${s.stroke}">${esc(p.text)}</text>`);
         break;
       }
     }
@@ -174,7 +197,7 @@ export function toDxf(d: Drawing, unit: Unit = 'mm'): string {
       case 'line':
       case 'polyline':
       case 'arrow':
-        poly(s.points ?? [], L, false);
+        poly(s.points ?? [], L, !!s.closed && s.type === 'polyline');
         if (s.type === 'arrow' && s.points && s.points.length >= 2) {
           const tip = s.points[s.points.length - 1];
           for (const h of arrowHead(s.points[s.points.length - 2], tip, 6 + s.strokeWidth * 2)) line(h, tip, L);
@@ -186,6 +209,14 @@ export function toDxf(d: Drawing, unit: Unit = 'mm'): string {
         line(p.line[0], p.line[1], L);
         p.ticks.forEach((t) => line(t[0], t[1], L));
         text({ x: p.mid.x, y: p.mid.y - 4 }, 12, dimensionText(s, unit), L, p.angle);
+        break;
+      }
+      case 'angle': {
+        const p = angleExportParts(s);
+        if (!p) break;
+        if (p.arms) poly(p.arms, L, false);
+        poly(p.arc, L, false);
+        text({ x: p.label.x - p.text.length * 3, y: p.label.y + 4 }, 12, p.text.replace('°', '%%d'), L);
         break;
       }
     }
@@ -268,6 +299,11 @@ export function toPdf(d: Drawing, unit: Unit = 'mm', grid?: { rowAcc: number[]; 
       case 'line':
       case 'polyline':
       case 'arrow':
+        if (s.closed && s.type === 'polyline') {
+          path(s.points ?? [], true);
+          ops.push(paint);
+          break;
+        }
         path(s.points ?? [], false);
         ops.push('S');
         if (s.type === 'arrow' && s.points && s.points.length >= 2) {
@@ -291,6 +327,19 @@ export function toPdf(d: Drawing, unit: Unit = 'mm', grid?: { rowAcc: number[]; 
         const ox = X(p.mid.x) - (tw / 2) * Math.cos(a);
         const oy = Y(p.mid.y - 4) - (tw / 2) * Math.sin(a);
         ops.push(`BT /F1 ${n2(12 * k)} Tf ${n2(Math.cos(a))} ${n2(Math.sin(a))} ${n2(-Math.sin(a))} ${n2(Math.cos(a))} ${n2(ox)} ${n2(oy)} Tm ${pdfStr(label)} Tj ET`);
+        break;
+      }
+      case 'angle': {
+        const p = angleExportParts(s);
+        if (!p) break;
+        if (p.arms) (path(p.arms, false), ops.push('S'));
+        path(p.arc, false);
+        ops.push('S');
+        fill(s.stroke);
+        // WinAnsi: \260 is the degree sign
+        const label = pdfStr(p.text.replace('°', '')).slice(0, -1) + '\\260)';
+        const tw = p.text.length * 12 * k * 0.5;
+        ops.push(`BT /F1 ${n2(12 * k)} Tf ${n2(X(p.label.x) - tw / 2)} ${n2(Y(p.label.y + 4))} Td ${label} Tj ET`);
         break;
       }
     }

@@ -36,6 +36,14 @@ export interface GridHit {
   picture?: string;
   shape?: string;
 }
+/** What fed input needs from a pointer event. */
+export interface FedPointer {
+  pointerId: number;
+  clientX: number;
+  clientY: number;
+  stopPropagation?: () => void;
+  preventDefault?: () => void;
+}
 export interface GridInputHooks {
   /** long press on a cell, header, picture or shape */
   onContext?: (hit: GridHit) => void;
@@ -48,7 +56,7 @@ export interface GridInputHooks {
 
 type Mode =
   | { kind: 'idle' }
-  | { kind: 'pending'; id: number; x: number; y: number; t: number; timer: ReturnType<typeof setTimeout>; hit: GridHit }
+  | { kind: 'pending'; id: number; x: number; y: number; t: number; timer: ReturnType<typeof setTimeout>; hit: GridHit; fed?: boolean }
   | { kind: 'pan'; id: number; x: number; y: number; ox: number; oy: number; lock: 'x' | 'y' | null; samples: Array<[number, number, number]> }
   | { kind: 'pinch'; d0: number; cx: number; cy: number }
   | { kind: 'resize'; id: number; axis: 'col' | 'row'; index: number; start: number; last: number; size: number; pos: number }
@@ -131,7 +139,8 @@ export class GridInput {
     }
     const drawing = doc.meta.drawings?.[sheetId] ?? emptyDrawing();
     if (drawing.shapes.length) {
-      const s = hitTest(drawing, { x: g.sheetX, y: g.sheetY }, 16 / v.zoom);
+      // outside drawing mode an unfilled shape is picked by its outline only, so cells inside stay tappable
+      const s = hitTest(drawing, { x: g.sheetX, y: g.sheetY }, 16 / v.zoom, { interior: false });
       if (s) out.shape = s.id;
     }
     return out;
@@ -213,10 +222,37 @@ export class GridInput {
   }
 
   // ------------------------------------------------------------------ pointer events
+  // ------------------------------------------------------------------ fed input
+  /*
+   * Drawing mode puts a layer over the grid that takes every touch. The touches it does not
+   * use itself (pan, fling, pinch, taps on cells) it hands over here, so the sheet scrolls and
+   * zooms exactly as outside drawing mode. Fed touches skip the target and `enabled` checks,
+   * are not captured (the drawing layer holds the capture) and never open menus or editors.
+   */
+  feedDown(e: FedPointer) {
+    this.handleDown(e, true);
+  }
+  feedMove(e: FedPointer) {
+    this.handleMove(e, true);
+  }
+  feedUp(e: FedPointer) {
+    this.handleUp(e, true);
+  }
+  feedCancel(e: FedPointer) {
+    this.handleCancel(e);
+  }
+  /** a fed touch is down (the grid is panning, pinching or waiting for a tap) */
+  owns(pointerId: number) {
+    return this.touches.has(pointerId);
+  }
+
   private down = (e: PointerEvent) => {
     if (this.synthetic.has(e) || !this.enabled) return;
     if (e.pointerType === 'mouse') return; // desktop: Univer's own mouse handling
     if (!this.isGridTarget(e)) return; // pop-ups, drop-down lists and other DOM inside the grid
+    this.handleDown(e, false);
+  };
+  private handleDown(e: FedPointer, fed: boolean) {
     const p = this.local(e);
     const v = viewInfo();
     if (!v) return;
@@ -227,8 +263,8 @@ export class GridInput {
 
     if (this.touches.size >= 2) {
       // second finger: pinch (whatever the first finger was doing)
-      e.stopPropagation();
-      e.preventDefault();
+      e.stopPropagation?.();
+      e.preventDefault?.();
       if (this.mode.kind === 'pending') clearTimeout(this.mode.timer);
       if (this.mode.kind === 'resize') this.guide.style.display = 'none';
       const [a, b] = [...this.touches.values()];
@@ -240,16 +276,18 @@ export class GridInput {
     }
 
     // selection handles: Univer extends the selection itself
-    if (!edit.get().editing && this.onSelectionHandle(v, p.x, p.y) && !flinging) {
+    if (!fed && !edit.get().editing && this.onSelectionHandle(v, p.x, p.y) && !flinging) {
       this.mode = { kind: 'passthrough', id: e.pointerId };
       return;
     }
-    e.stopPropagation();
-    e.preventDefault();
-    try {
-      this.host.setPointerCapture(e.pointerId);
-    } catch {
-      /* synthetic pointers in tests */
+    e.stopPropagation?.();
+    e.preventDefault?.();
+    if (!fed) {
+      try {
+        this.host.setPointerCapture(e.pointerId);
+      } catch {
+        /* synthetic pointers in tests */
+      }
     }
     if (flinging) {
       // a touch during a fling just stops it
@@ -257,7 +295,7 @@ export class GridInput {
       this.mode = { kind: 'dead' };
       return;
     }
-    const edge = this.headerEdge(v, p.x, p.y);
+    const edge = fed ? null : this.headerEdge(v, p.x, p.y);
     if (edge) {
       const ws = doc.wb.getActiveSheet();
       const size = edge.axis === 'col' ? ws.getColumnWidth(edge.index) : ws.getRowHeight(edge.index);
@@ -275,19 +313,24 @@ export class GridInput {
       this.showGuide(edge.axis, edge.pos);
       return;
     }
-    const hit = this.hit(v, p.x, p.y);
-    const timer = setTimeout(() => this.longPress(), LONG_MS);
-    this.mode = { kind: 'pending', id: e.pointerId, x: p.x, y: p.y, t: performance.now(), timer, hit };
-  };
+    const hit = fed ? (() => { const g = hitGrid(v, p.x, p.y); return { x: p.x, y: p.y, area: g.area, row: g.row, col: g.col } as GridHit; })() : this.hit(v, p.x, p.y);
+    const timer = fed ? undefined : setTimeout(() => this.longPress(), LONG_MS);
+    this.mode = { kind: 'pending', id: e.pointerId, x: p.x, y: p.y, t: performance.now(), timer: timer as ReturnType<typeof setTimeout>, hit, fed };
+  }
 
   private move = (e: PointerEvent) => {
     if (this.synthetic.has(e) || !this.enabled || e.pointerType === 'mouse') return;
+    this.handleMove(e, false);
+  };
+  private handleMove(e: FedPointer, fed: boolean) {
     const m = this.mode;
     if (m.kind === 'idle') return;
     if (m.kind === 'passthrough') return;
     if (!this.touches.has(e.pointerId)) return;
-    e.stopPropagation();
-    e.preventDefault();
+    if (!fed) {
+      e.stopPropagation?.();
+      e.preventDefault?.();
+    }
     const p = this.local(e);
     this.touches.set(e.pointerId, p);
     if (m.kind === 'pending') {
@@ -334,10 +377,13 @@ export class GridInput {
       const min = m.pos - m.size * z + 6;
       this.showGuide(m.axis, Math.max(min, m.pos + (cur - m.start)));
     }
-  };
+  }
 
   private up = (e: PointerEvent) => {
     if (this.synthetic.has(e) || !this.enabled || e.pointerType === 'mouse') return;
+    this.handleUp(e, false);
+  };
+  private handleUp(e: FedPointer, fed: boolean) {
     const m = this.mode;
     if (m.kind === 'passthrough') {
       if (e.pointerId === m.id) {
@@ -348,19 +394,21 @@ export class GridInput {
       return;
     }
     if (!this.touches.has(e.pointerId)) return;
-    e.stopPropagation();
-    e.preventDefault();
     const p = this.local(e);
     this.touches.delete(e.pointerId);
-    try {
-      this.host.releasePointerCapture(e.pointerId);
-    } catch {
-      /* not captured */
+    if (!fed) {
+      e.stopPropagation?.();
+      e.preventDefault?.();
+      try {
+        this.host.releasePointerCapture(e.pointerId);
+      } catch {
+        /* not captured */
+      }
     }
     if (m.kind === 'pending') {
       clearTimeout(m.timer);
       this.mode = { kind: 'idle' };
-      this.tap(m.x, m.y, m.hit, m.t);
+      this.tap(m.x, m.y, m.hit, m.t, !!m.fed);
     } else if (m.kind === 'pan') {
       this.mode = { kind: 'idle' };
       // velocity over the last ~100 ms, in screen px / ms
@@ -401,10 +449,13 @@ export class GridInput {
       if (m.axis === 'col') ws.setColumnWidths(m.index, 1, size);
       else ws.setRowHeights(m.index, 1, size);
     } else if (this.touches.size === 0) this.mode = { kind: 'idle' };
-  };
+  }
 
   private cancel = (e: PointerEvent) => {
     if (this.synthetic.has(e) || e.pointerType === 'mouse') return;
+    this.handleCancel(e);
+  };
+  private handleCancel(e: FedPointer) {
     const m = this.mode;
     this.touches.delete(e.pointerId);
     if (m.kind === 'pending') clearTimeout(m.timer);
@@ -414,13 +465,19 @@ export class GridInput {
       this.endGesture(m.kind);
     }
     if (this.touches.size === 0) this.mode = { kind: 'idle' };
-  };
+  }
 
   // ------------------------------------------------------------------ gestures
-  private async tap(x: number, y: number, hit: GridHit, downAt: number) {
+  private async tap(x: number, y: number, hit: GridHit, downAt: number, fed = false) {
     const now = performance.now();
     const double = !!this.lastTap && downAt - this.lastTap.t < DOUBLE_MS && Math.hypot(this.lastTap.x - x, this.lastTap.y - y) < DOUBLE_PX;
     this.lastTap = double ? null : { t: now, x, y, hit };
+    if (fed) {
+      // drawing mode: a tap only moves the cell selection
+      if (edit.get().editing) await edit.commit(null);
+      this.forwardTap(x, y);
+      return;
+    }
     const sheetId = doc.wb.getActiveSheet().getSheetId();
     if (hit.picture) {
       if (edit.get().editing) await edit.commit(null);

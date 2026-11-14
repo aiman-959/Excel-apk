@@ -96,10 +96,11 @@ await step('units: cm, in and cells', async () => {
   await page.selectOption('[data-testid=draw-unit]', 'mm');
 });
 
-await step('line snaps to 15° angles and shows live length', async () => {
+await step('line snaps to 45° and shows the magnifier', async () => {
   await setTool('line');
   await page.click('[data-testid=draw-snaps]');
   await page.uncheck('[data-testid=snap-cellEdges]');
+  await page.uncheck('[data-testid=snap-cellCentres]');
   await page.click('[data-testid=draw-snaps]');
   let loupeSeen = false;
   await drag([110, 300], [210, 397], {
@@ -124,6 +125,16 @@ await step('dimension line measures in the chosen unit', async () => {
   assert.equal(s.type, 'dimension');
   assert.deepEqual(s.points, [{ x: 0, y: 360 }, { x: 264, y: 360 }]);
   assert.equal(await page.textContent('[data-testid=prop-len]'), `L ${(264 / PX_PER_MM).toFixed(1)} mm`);
+});
+
+await step('a shape returns the tool to Select; a click on another shape selects it', async () => {
+  await setTool('rect');
+  await drag([100, 500], [140, 530]);
+  assert.equal(await ev(() => window.__draw.get().tool), 'select');
+  const r = await last();
+  assert.deepEqual(await ev(() => window.__draw.get().selected), [r.id]);
+  await page.click('[data-testid=shape-delete]');
+  assert.notEqual((await last())?.id, r.id);
 });
 
 await step('polyline by taps, finished with the check button', async () => {
@@ -159,6 +170,8 @@ await step('smart guide aligns a moved shape with another', async () => {
   await setTool('rect');
   await page.click('[data-testid=draw-snaps]');
   await page.uncheck('[data-testid=snap-cellEdges]');
+  await page.uncheck('[data-testid=snap-cellCentres]');
+  await page.uncheck('[data-testid=snap-fitCells]'); // free-hand rectangles from here on
   await page.click('[data-testid=draw-snaps]');
   await drag([600, 100], [650, 140]);
   const moving = await last();
@@ -177,7 +190,8 @@ await step('smart guide aligns a moved shape with another', async () => {
 });
 
 await step('marquee multi-select, align and distribute', async () => {
-  await setTool('rect');
+  await page.dblclick('[data-testid=draw-tool-rect]'); // double click keeps the tool on
+  assert.equal(await page.getAttribute('[data-testid=draw-tool-rect]', 'data-locked'), 'true');
   await drag([660, 300], [690, 330]);
   await drag([720, 340], [750, 370]);
   await drag([820, 310], [850, 340]);

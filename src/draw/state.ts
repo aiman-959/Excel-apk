@@ -1,14 +1,18 @@
 /** Drawing-mode UI state and the per-sheet drawing history (undo / redo). */
 import { useSyncExternalStore } from 'react';
 import { doc } from '../state/doc';
-import { defaultSnaps, emptyDrawing, type Drawing, type Shape, type SnapToggles, type Unit } from './geometry';
+import { defaultSnaps, emptyDrawing, refreshAngles, type Drawing, type Shape, type SnapToggles, type Unit } from './geometry';
 
-export type DrawTool = 'select' | 'rect' | 'ellipse' | 'line' | 'polyline' | 'arrow' | 'text' | 'image' | 'dimension';
+export type DrawTool = 'select' | 'rect' | 'ellipse' | 'line' | 'polyline' | 'arrow' | 'text' | 'image' | 'dimension' | 'angle';
 export type DrawPanel = null | 'snaps' | 'layers' | 'arrange' | 'export' | 'cellsize';
 
 interface DrawUi {
   active: boolean;
   tool: DrawTool;
+  /** the tool stays armed after a shape (long press on its button); otherwise it returns to Select */
+  toolLocked: boolean;
+  /** rectangles cover whole cells */
+  fitCells: boolean;
   selected: string[];
   snaps: SnapToggles;
   layerId: string;
@@ -22,6 +26,8 @@ interface DrawUi {
 let st: DrawUi = {
   active: false,
   tool: 'select',
+  toolLocked: false,
+  fitCells: true,
   selected: [],
   snaps: defaultSnaps(),
   layerId: 'L1',
@@ -55,10 +61,19 @@ export const draw = {
     return () => listeners.delete(l);
   },
   open(tool: DrawTool = 'select') {
-    set({ active: true, tool, panel: null });
+    set({ active: true, tool, toolLocked: false, panel: null });
   },
   close() {
-    set({ active: false, selected: [], panel: null, tool: 'select' });
+    set({ active: false, selected: [], panel: null, tool: 'select', toolLocked: false });
+  },
+  /** Arm a tool (or the same tool again: disarm). `lock` keeps it armed after each shape. */
+  arm(tool: DrawTool, lock = false) {
+    if (tool === 'select') return set({ tool, toolLocked: false });
+    set({ tool, toolLocked: lock, selected: [], panel: null });
+  },
+  /** After a shape is finished: back to Select unless the tool is locked. */
+  shapeDone(id?: string) {
+    set({ ...(id ? { selected: [id] } : {}), ...(st.toolLocked ? {} : { tool: 'select' as DrawTool }) });
   },
   unit(): Unit {
     return doc.meta.drawUnit ?? 'mm';
@@ -79,6 +94,7 @@ export const draw = {
       if (h.undo.length > LIMIT) h.undo.shift();
       h.redo = [];
     }
+    next = { ...next, shapes: refreshAngles(next.shapes) };
     doc.updateMeta((m) => (m.drawings = { ...(m.drawings ?? {}), [id]: next }));
     // drop selected ids that no longer exist
     const ids = new Set(next.shapes.map((s) => s.id));
@@ -126,3 +142,4 @@ export function useDraw<T>(sel: (s: DrawUi) => T): T {
 }
 
 export const newId = () => 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+(globalThis as unknown as { __draw: typeof draw }).__draw = draw;

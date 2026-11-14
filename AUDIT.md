@@ -4,7 +4,9 @@ Audit of Petak 1.1.0 (commit `20ec565`), done before any fixing. Every finding b
 reproduced by a script in this repository; nothing is listed from guesswork unless marked
 **(code reading)**.
 
-Status column: **Open** = not fixed yet. This file is updated at the end of every phase.
+Status column: **Open** = not fixed yet; **Fixed** = fixed and covered by the named automated test
+(phone-profile Playwright suites in `tests/e2e/`, unit tests in `tests/unit/`). **Partly** = some of it
+fixed, the rest says what remains. This file is updated at the end of every phase.
 
 ## How the audit was done
 
@@ -36,36 +38,36 @@ Device: Low/Mid/High tiers, load governor, on-demand modules.
 
 | ID | Sev. | Finding | Status |
 |---|---|---|---|
-| C-01 | Critical | Saving destroys everything Petak does not model: pictures, hyperlinks, autofilter, named ranges, tables, page setup, rich text, column styles… **Save writes over the original file.** | Open |
-| C-02 | Critical | Typing in a cell after a double tap (or with a keyboard) is thrown away | Open |
-| C-03 | Critical | Tapping a cell while typing a formula discards the formula | Open |
+| C-01 | Critical | Saving destroys everything Petak does not model: pictures, hyperlinks, autofilter, named ranges, tables, page setup, rich text, column styles… **Save writes over the original file.** | Fixed: lossless save patches the original package (`ooxml-roundtrip.test.ts`, `features.mjs`) |
+| C-02 | Critical | Typing in a cell after a double tap (or with a keyboard) is thrown away | Fixed (`cells.mjs`) |
+| C-03 | Critical | Tapping a cell while typing a formula discards the formula | Fixed (`cells.mjs`) |
 | C-04 | Critical | "Open with Petak" starts the app but does not open the file | Open |
-| C-05 | Critical | Named ranges are not loaded: formulas using them show `#NAME?` (and that is what gets saved) | Open |
-| C-06 | Critical | Table references (`Sales[Amount]`) show `#ERROR!` | Open |
-| C-07 | Critical | Dates in Jan–Feb 1900 are one day off (`=DATE(1900,2,29)`) | Open |
-| K-01 | High | Shapes cannot be selected after drawing, so cannot be deleted | Open |
-| K-02 | High | Polyline: adds a point on every tap, hard to finish | Open |
-| K-03 | High | Line tool does not behave as press, drag, release on the phone | Open |
-| K-04 | High | Nothing snaps when a shape starts in the middle of a cell | Open |
-| K-05 | High | Scrolling and pinch zoom are slow and stutter | Open |
+| C-05 | Critical | Named ranges are not loaded: formulas using them show `#NAME?` (and that is what gets saved) | Fixed (unit tests) |
+| C-06 | Critical | Table references (`Sales[Amount]`) show `#ERROR!` | Fixed (unit tests) |
+| C-07 | Critical | Dates in Jan–Feb 1900 are one day off (`=DATE(1900,2,29)`) | Fixed (unit tests) |
+| K-01 | High | Shapes cannot be selected after drawing, so cannot be deleted | Fixed (`draw-touch.mjs`, `part3.mjs`) |
+| K-02 | High | Polyline: adds a point on every tap, hard to finish | Fixed (`draw-touch.mjs`) |
+| K-03 | High | Line tool does not behave as press, drag, release on the phone | Fixed in the browser (`draw-touch.mjs`); device run pending |
+| K-04 | High | Nothing snaps when a shape starts in the middle of a cell | Fixed (`draw.test.ts`, `draw-touch.mjs`) |
+| K-05 | High | Scrolling and pinch zoom are slow and stutter | Partly: GPU compositor works in e2e; device fps not measured yet |
 | K-06 | High | Excel fonts do not display correctly | Open |
 | K-07 | High | Opening another file does nothing on the phone | Open |
 | K-08 | High | Grid lines and borders are broken / faded at zoom ≠ 100 % | Open |
-| K-09 | High | Hyperlinks load as plain text | Open |
-| K-10 | High | Pictures in files are not loaded | Open |
+| K-09 | High | Hyperlinks load as plain text | Fixed (`cells2.mjs`) |
+| K-10 | High | Pictures in files are not loaded | Fixed (`cells2.mjs`) |
 | K-11 | High | Frozen rows/columns: content overlaps at the freeze line | Open |
-| K-12 | High | A single tap on a cell opens the keyboard | Open |
-| H-01 | High | No keyboard support at all: arrows, Shift/Ctrl+arrows, Delete, F2, Ctrl+C/X/V do nothing | Open |
-| H-02 | High | No copy / cut / paste anywhere in the phone UI; long press does nothing | Open |
+| K-12 | High | A single tap on a cell opens the keyboard | Fixed (`cells.mjs`) |
+| H-01 | High | No keyboard support at all: arrows, Shift/Ctrl+arrows, Delete, F2, Ctrl+C/X/V do nothing | Fixed (`cells.mjs`) |
+| H-02 | High | No copy / cut / paste anywhere in the phone UI; long press does nothing | Fixed (`cells.mjs`, `cells2.mjs`) |
 | H-03 | High | `.xls` files open without any formatting or frozen panes | Open |
-| H-04 | High | Autofilter in a file is not loaded | Open |
-| H-05 | High | Columns/rows cannot be resized by touch; no hide/unhide in the UI | Open |
+| H-04 | High | Autofilter in a file is not loaded | Fixed (unit + e2e) |
+| H-05 | High | Columns/rows cannot be resized by touch; no hide/unhide in the UI | Fixed (`cells.mjs`) |
 | H-06 | High | Unsaved-changes prompt cannot save: only "Continue" (discard) or cancel | Open |
-| H-07 | High | Rich text in a cell loses its formatting on load (flattened) | Open |
+| H-07 | High | Rich text in a cell loses its formatting on load (flattened) | Partly: kept on save (C-01); not shown as runs yet |
 | M-01 | Medium | No fill handle (copy / series by dragging) | Open |
-| M-02 | Medium | No status bar (Sum / Average / Count of the selection) | Open |
-| M-03 | Medium | Formula entry: no argument hints, no coloured references | Open |
-| M-04 | Medium | Number cells do not get a numeric keyboard; Tab does not move right | Open |
+| M-02 | Medium | No status bar (Sum / Average / Count of the selection) | Fixed (`cells2.mjs`) |
+| M-03 | Medium | Formula entry: no argument hints, no coloured references | Partly: argument hints done; coloured references open |
+| M-04 | Medium | Number cells do not get a numeric keyboard; Tab does not move right | Fixed (`cells.mjs`) |
 | M-05 | Medium | Charts, sparklines, slicers, drawings are not on the main undo stack | Open |
 | M-06 | Medium | Circular reference shows `#CYCLE!` without explanation | Open |
 | M-07 | Medium | CSV export writes only the active sheet and does not say so | Open |
@@ -153,6 +155,7 @@ Device-only observations (emulator) are in the section "On a real Android WebVie
   With the Select tool an unfilled rectangle can only be hit near its outline on the phone.
 - **Planned fix:** return to Select after one shape (long-press a tool to lock it); 16 dp hit
   tolerance; tapping a shape in normal mode selects it; selection toolbar with Delete.
+- **Fixed:** after one shape the tool returns to Select (long-press or double-click a tool to keep it on) and the new shape is selected; tap selects with a 16 px tolerance (inside unfilled shapes too while drawing); floating tool bar with Delete, Duplicate, Bring to front, Send to back, Lock; outside drawing mode a tap on a shape's outline opens drawing mode with it selected. Tests: `draw-touch.mjs` (K-01 steps, lock, layers list, outside drawing mode), `part3.mjs`.
 
 ### K-02 Polyline never finishes
 - **Steps:** Draw → Polyline, tap points. `audit2.mjs` (touch emulation finished with a double tap; on the phone it did not).
@@ -161,11 +164,13 @@ Device-only observations (emulator) are in the section "On a real Android WebVie
   the double-tap window is 350 ms / 14 px and the first tap of the double tap adds a stray point.
 - **Planned fix:** "Done" and "Undo point" buttons next to the finger, double tap (without a stray
   point), tap the first point to close, Back cancels.
+- **Fixed:** a point is placed when the finger lifts (rubber band while it is down); double tap finishes without a stray point; tapping the first point closes the shape (`closed`, can be filled); chips Undo point / Cancel / Done above the bottom bar; Back and Escape cancel. Tests: `draw-touch.mjs` (three K-02 steps).
 
 ### K-03 Line tool is not press–drag–release on the phone
 - **Steps:** Draw → Line, press, drag, release. Works in touch emulation; reported as tap-to-tap on the phone (see device run).
 - **Planned fix:** handle raw touch events (not only pointer events) with `touch-action: none`,
   ignore `pointercancel` caused by the WebView's own gesture detection, live preview while dragging.
+- **Fixed in the browser:** every drawing tool is press, drag (live preview, length · angle label), release. A second finger within 250 ms cancels the shape and pinches instead; later it turns snapping off while it rests. If the WebView cancels the pointer mid-shape, the gesture carries on with the raw touch events instead of being lost. The overlay hands pans, flings, pinches and cell taps to the grid's touch layer, so the sheet scrolls exactly as outside drawing mode. Tests: `draw-touch.mjs`. Still to confirm on the emulator / phone.
 
 ### K-04 Nothing snaps when starting mid-cell
 - **Steps:** Draw → Rectangle, start in the middle of a cell. `audit2.mjs`.
@@ -173,6 +178,7 @@ Device-only observations (emulator) are in the section "On a real Android WebVie
   free-hand, and there is no "fit to cells" mode. Near an edge it does snap (`{x:88,y:360,w:126,h:84}`).
 - **Planned fix:** 12 dp snap distance in screen space at every zoom, cell centres as second
   priority, a visible snap marker, and a "fit to cells" rectangle that covers a cell range exactly.
+- **Fixed:** 12 px snap distance on screen at every zoom; candidates scored by distance + priority (cell corners, cell centres +4 px, object points +8 px); otherwise angle (0/90/180/270 within 6°, multiples of 30°/45° within 4°, optional 15°), then cell edge or centre per axis; marker, label and guide line; magnet chip turns all snapping off; rectangles fit to cells by default. Tests: `draw.test.ts` (angle table, priority at three zooms, fit to cells, hit tolerance), `draw-touch.mjs`.
 
 ### K-05 Scrolling and pinch zoom stutter
 - **Steps:** roster file, drag / fling / pinch. `tests/audit/profile.mjs` with 4× CPU throttling (approximates a phone core).

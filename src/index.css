@@ -205,7 +205,27 @@ table.preview th { background: var(--surface-2); position: sticky; top: 0; }
 .layer-row.on { background: var(--accent-soft); }
 .layer-name { flex: 1; text-align: left; border: 0; background: transparent; min-height: 40px; cursor: pointer; font-weight: 600; }
 .layer-name small { color: var(--text-2); font-weight: 400; }
-.draw-props { position: absolute; left: 52px; right: 6px; bottom: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 6px 8px; z-index: 4; display: flex; flex-direction: column; gap: 6px; }
+.draw-bottom { position: absolute; left: 52px; right: 6px; bottom: 8px; z-index: 4; display: flex; flex-direction: column; align-items: stretch; gap: 6px; pointer-events: none; }
+.draw-bottom > * { pointer-events: auto; }
+.draw-props { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.draw-props input:disabled { opacity: 0.5; }
+.draw-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none; }
+.draw-chips > * { pointer-events: auto; }
+.draw-chip { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid var(--border); background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-family: inherit; font-weight: 600; font-size: 13px; line-height: 1.2; cursor: pointer; }
+.draw-chip.mode { cursor: default; font-weight: 500; max-width: 100%; }
+.draw-chip.mode.locked { border-color: var(--accent); }
+.draw-chip.on { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent); }
+.draw-chip.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.draw-chip:disabled { opacity: 0.45; }
+.draw-selbar { position: absolute; left: 0; top: 0; z-index: 4; display: flex; gap: 2px; padding: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+.draw-selbar[hidden] { display: none; }
+.dbtn { position: relative; }
+.dbtn.locked { box-shadow: inset 0 0 0 2px var(--accent); }
+.dbtn .tool-lock { position: absolute; right: 3px; bottom: 3px; }
+.layer-row { flex-wrap: wrap; }
+.layer-shapes { list-style: none; margin: 0 0 4px; padding: 0 0 0 10px; width: 100%; display: flex; flex-direction: column; gap: 2px; }
+.layer-shape { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--text); text-align: left; padding: 0 8px; cursor: pointer; font: inherit; font-size: 13px; }
+.layer-shape.on { background: var(--accent-soft); color: var(--accent-strong); }
 .num-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .num-field { display: flex; align-items: center; gap: 4px; background: var(--surface-2); border-radius: 8px; padding: 0 6px; height: 36px; font-size: 13px; }
 .num-field > span { color: var(--text-2); font-weight: 600; }
