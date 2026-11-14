@@ -216,8 +216,9 @@ type DvCell = FRange & { getDataValidation(): { rule: DvRule } | null; getDataVa
  * Commit from the formula bar, honouring data-validation error alerts:
  * Stop rejects the value, Warning asks, Information just tells.
  */
-export async function commitValidated(text: string) {
-  const r = (doc.wb.getActiveSheet().getActiveCell() ?? activeRange()) as DvCell;
+export async function commitValidated(text: string, target?: { sheetId: string; row: number; col: number }) {
+  const ws = (target && doc.wb.getSheetBySheetId(target.sheetId)) || doc.wb.getActiveSheet();
+  const r = (target ? ws.getRange(target.row, target.col) : (ws.getActiveCell() ?? activeRange())) as DvCell;
   const rule = r.getDataValidation?.()?.rule;
   const before = r.getFormula() || (r.getCellData()?.v ?? null);
   commitInput(text, r);

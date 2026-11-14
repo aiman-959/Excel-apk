@@ -21,6 +21,8 @@ import { fingerprints, type Fingerprints } from '../io/ooxml/fingerprint';
 import { notesResource, RES_DV } from '../io/review';
 import { pictures, setCellPictures, clearCellPictures } from '../pictures/pictures';
 import { kv } from './storage';
+import { Compositor } from '../grid/compositor';
+import { GridInput, type GridInputHooks } from '../grid/input';
 import { cfFromUniver, cfToUniver, type UCfRule } from '../univer/cf';
 import { getTier } from '../device/tier';
 import { governor } from '../device/governor';
@@ -139,8 +141,28 @@ class Doc {
     return this.ioRpc;
   }
 
+  /** touch input and GPU-composited scrolling (touch devices) */
+  input: GridInput | null = null;
+  /** true while a finger pans / flings / pinches: UI state updates wait until it ends */
+  gesturing = false;
+  inputHooks: GridInputHooks = {};
+
   init(container: HTMLElement, mobile: boolean) {
     this.h = createUniverApp(container, { mobile });
+    if (mobile) {
+      const tier = getTier();
+      const comp = new Compositor(container, tier.tier === 'high' ? 8 : tier.tier === 'mid' ? 6 : 4);
+      this.input = new GridInput(container, comp, {
+        onContext: (h) => this.inputHooks.onContext?.(h),
+        onShapeTap: (id) => this.inputHooks.onShapeTap?.(id),
+        onPictureDoubleTap: (id) => this.inputHooks.onPictureDoubleTap?.(id),
+        onGesture: (active, kind) => {
+          this.gesturing = active;
+          this.inputHooks.onGesture?.(active, kind);
+          if (!active) this.listeners.forEach((l) => l());
+        },
+      });
+    }
     this.bridge = new FormulaBridge(this.h.api, getTier().chunkRows);
     // sparklines read their source cells while drawing: repaint when values change elsewhere
     let rt: ReturnType<typeof setTimeout> | undefined;
@@ -170,7 +192,7 @@ class Doc {
     this.repaintSparklines = repaint;
     const cmd = this.injector<ICommandService>(ICommandService);
     cmd.onCommandExecuted((info, options) => {
-      if (this.loading) return;
+      if (this.loading || this.gesturing) return;
       const opt = options as { fromFormulaEngine?: boolean; onlyLocal?: boolean; autoGrow?: boolean } | undefined;
       if (opt?.autoGrow) return;
       if (info.id === 'sheet.operation.set-scroll' || info.id === 'sheet.operation.set-selections') this.scheduleGrow();

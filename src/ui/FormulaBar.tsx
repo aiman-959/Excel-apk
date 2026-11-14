@@ -1,36 +1,67 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { ArrowRight, Check, X } from 'lucide-react';
 import { useSelection } from './hooks';
 import { commitValidated } from './actions';
+import { edit, useEdit } from './editSession';
 import { useInputMessage } from '../review/ReviewDialogs';
 import { doc } from '../state/doc';
 import { parseRange } from '../io/a1';
 import { guard } from './store';
+import { FUNCTION_HINTS } from '../engine/functionHints';
 
 let fnNames: string[] = [];
 
+/** The function call the caret is inside of, and which argument (for the hint line). */
+export function callAtCaret(text: string, caret: number): { name: string; arg: number } | null {
+  if (!text.startsWith('=')) return null;
+  const stack: Array<{ name: string; arg: number }> = [];
+  let inStr = false;
+  let token = '';
+  for (let i = 1; i < Math.min(caret, text.length); i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      token = '';
+    } else if (ch === '(') {
+      stack.push({ name: token.toUpperCase(), arg: 0 });
+      token = '';
+    } else if (ch === ')') {
+      stack.pop();
+      token = '';
+    } else if (ch === ',' || ch === ';') {
+      if (stack.length) stack[stack.length - 1].arg++;
+      token = '';
+    } else if (/[A-Za-z0-9_.]/.test(ch)) token += ch;
+    else token = '';
+  }
+  for (let i = stack.length - 1; i >= 0; i--) if (stack[i].name) return stack[i];
+  return null;
+}
+
 /**
  * Formula bar. On phones it is docked at the bottom, so with the WebView in
- * adjustResize mode it sits directly above the soft keyboard.
+ * adjustResize mode it sits directly above the soft keyboard. All cell editing
+ * happens here (see editSession.ts).
  */
 export function FormulaBar() {
   const sel = useSelection();
-  const [text, setText] = useState('');
-  const [editing, setEditing] = useState(false);
+  const ed = useEdit((s) => s);
   const [refText, setRefText] = useState('');
   const [hi, setHi] = useState(0);
+  const [caret, setCaret] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const debounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const text = ed.editing ? ed.text : sel.raw;
 
   useEffect(() => {
-    // selection moved while the input is not focused: drop the stale edit
-    if (editing && document.activeElement !== input.current) setEditing(false);
-    if (!editing) setText(sel.raw);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sel.raw, sel.ref]);
-  useEffect(() => {
-    if (!editing) setText(sel.raw);
-  }, [editing, sel.raw]);
+    edit.bindInput(input.current);
+    edit.bindCommit((t, target) => commitValidated(t, target));
+    return () => edit.bindInput(null);
+  }, []);
   useEffect(() => {
     if (!fnNames.length) doc.bridge.functionNames().then((n) => (fnNames = n.sort()));
   }, []);
@@ -40,39 +71,29 @@ export function FormulaBar() {
   useEffect(() => {
     clearTimeout(debounce.current);
     debounce.current = setTimeout(() => {
-      const m = editing && text.startsWith('=') ? /([A-Za-z][A-Za-z0-9.]*)$/.exec(text) : null;
-      setToken(m ? m[1].toUpperCase() : '');
+      const upto = text.slice(0, caret || text.length);
+      const m = ed.editing && text.startsWith('=') ? /([A-Za-z][A-Za-z0-9.]*)$/.exec(upto) : null;
+      setToken(m && !/^[A-Za-z]{1,3}\d+$/.test(m[1]) ? m[1].toUpperCase() : '');
       setHi(0);
     }, 80);
-  }, [text, editing]);
+  }, [text, ed.editing, caret]);
   const suggestions = useMemo(() => (token ? fnNames.filter((n) => n.startsWith(token)).slice(0, 8) : []), [token]);
+  const call = useMemo(() => (ed.editing ? callAtCaret(text, caret || text.length) : null), [ed.editing, text, caret]);
+  const hintArgs = call ? FUNCTION_HINTS[call.name] : undefined;
 
   const accept = (name: string) => {
-    setText((t) => t.replace(/([A-Za-z][A-Za-z0-9.]*)$/, name + '('));
+    const el = input.current;
+    const pos = el?.selectionStart ?? text.length;
+    const before = text.slice(0, pos).replace(/([A-Za-z][A-Za-z0-9.]*)$/, name + '(');
+    edit.setText(before + text.slice(pos));
     setToken('');
-    input.current?.focus();
-  };
-
-  const commit = (move: 'down' | 'right' | null) => {
-    guard(async () => {
-      setEditing(false);
-      await commitValidated(text);
-      if (move) {
-        const ws = doc.wb.getActiveSheet();
-        const cell = ws.getActiveCell();
-        if (cell) {
-          const r = cell.getRow() + (move === 'down' ? 1 : 0);
-          const c = cell.getColumn() + (move === 'right' ? 1 : 0);
-          ws.getRange(r, c).activate();
-        }
-      }
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(before.length, before.length);
+      setCaret(before.length);
     });
   };
-  const cancel = () => {
-    setEditing(false);
-    setText(sel.raw);
-    input.current?.blur();
-  };
+  const commit = (move: 'down' | 'right' | null) => guard(() => edit.commit(move));
 
   const goTo = () => {
     guard(() => {
@@ -92,11 +113,25 @@ export function FormulaBar() {
   const hint = useInputMessage(sel.ref);
   return (
     <div className="fbar" data-testid="formula-bar">
-      {hint && !suggestions.length && (
-        <div className="input-hint" role="note" data-testid="input-hint">
-          {hint.title && <b>{hint.title}: </b>}
-          {hint.text}
+      {hintArgs && !suggestions.length ? (
+        <div className="input-hint arg-hint" role="note" data-testid="arg-hint">
+          <b>{call!.name}</b>(
+          {hintArgs.map((a, i) => (
+            <span key={i} className={i === Math.min(call!.arg, hintArgs.length - 1) ? 'cur' : ''}>
+              {i ? ', ' : ''}
+              {a}
+            </span>
+          ))}
+          )
         </div>
+      ) : (
+        hint &&
+        !suggestions.length && (
+          <div className="input-hint" role="note" data-testid="input-hint">
+            {hint.title && <b>{hint.title}: </b>}
+            {hint.text}
+          </div>
+        )
       )}
       <input
         className="ref"
@@ -119,14 +154,17 @@ export function FormulaBar() {
         data-testid="formula-input"
         value={text}
         enterKeyHint="next"
+        inputMode={ed.editing && ed.numeric ? 'decimal' : 'text'}
         autoCapitalize="off"
         autoCorrect="off"
+        autoComplete="off"
         spellCheck={false}
-        onFocus={() => setEditing(true)}
+        onFocus={() => edit.start(undefined, { focus: false })}
         onChange={(e) => {
-          setEditing(true);
-          setText(e.target.value);
+          edit.setText(e.target.value);
+          setCaret(e.target.selectionStart ?? e.target.value.length);
         }}
+        onSelect={(e) => setCaret((e.target as HTMLInputElement).selectionStart ?? 0)}
         onKeyDown={(e) => {
           if (suggestions.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
             e.preventDefault();
@@ -134,16 +172,28 @@ export function FormulaBar() {
           } else if (e.key === 'Tab' && suggestions.length) {
             e.preventDefault();
             accept(suggestions[hi]);
+          } else if (e.key === 'Tab') {
+            e.preventDefault();
+            guard(() => edit.commit(e.shiftKey ? 'left' : 'right'));
           } else if (e.key === 'Enter') {
             e.preventDefault();
-            commit('down');
-          } else if (e.key === 'Escape') cancel();
+            guard(() => edit.commit(e.shiftKey ? 'up' : 'down'));
+          } else if (e.key === 'Escape') {
+            e.stopPropagation();
+            edit.cancel();
+          }
         }}
       />
-      {editing && (
+      {ed.editing && (
         <>
-          <button className="icon-btn" aria-label="Cancel" onPointerDown={(e) => e.preventDefault()} onClick={cancel}>
+          <button className="icon-btn kb" aria-label={ed.numeric ? 'Text keyboard' : 'Number keyboard'} data-testid="formula-kb" onPointerDown={(e) => e.preventDefault()} onClick={() => edit.setNumeric(!ed.numeric)}>
+            {ed.numeric ? 'abc' : '123'}
+          </button>
+          <button className="icon-btn" aria-label="Cancel" data-testid="formula-cancel" onPointerDown={(e) => e.preventDefault()} onClick={() => edit.cancel()}>
             <X size={20} />
+          </button>
+          <button className="icon-btn" aria-label="Confirm and move right" data-testid="formula-tab" onPointerDown={(e) => e.preventDefault()} onClick={() => commit('right')}>
+            <ArrowRight size={20} />
           </button>
           <button className="icon-btn on" aria-label="Confirm" data-testid="formula-commit" onPointerDown={(e) => e.preventDefault()} onClick={() => commit(null)}>
             <Check size={22} />

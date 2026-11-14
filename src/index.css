@@ -219,3 +219,13 @@ table.preview th { background: var(--surface-2); position: sticky; top: 0; }
 
 /* load governor (device/governor.ts): no decorative motion while frames drop or the phone is hot */
 html[data-load='1'] *, html[data-load='2'] * { animation-duration: 0s !important; transition: none !important; }
+
+/* ---------------------------------------------------------------- gestures (grid/compositor.ts, grid/input.ts) */
+.grid-compositor { position: absolute; inset: 0; display: none; overflow: hidden; pointer-events: none; z-index: 3; background: var(--surface); will-change: transform; contain: strict; }
+.gc-clip { position: absolute; overflow: hidden; background: var(--surface); contain: strict; }
+.gc-mover { position: absolute; left: 0; top: 0; width: 1px; height: 1px; will-change: transform; }
+.gc-mover > canvas, .gc-clip > canvas { position: absolute; left: 0; top: 0; }
+.resize-guide { position: absolute; display: none; background: var(--accent); z-index: 4; pointer-events: none; }
+.fbar .kb { font-size: 12px; font-weight: 700; width: 40px; }
+.arg-hint { font-family: ui-monospace, 'Roboto Mono', monospace; font-size: 13px; }
+.arg-hint .cur { font-weight: 700; color: var(--accent-strong); }

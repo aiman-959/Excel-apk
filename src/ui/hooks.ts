@@ -50,7 +50,10 @@ export function useSelection(): SelInfo {
     const wb = doc.api.getActiveWorkbook();
     if (!wb) return;
     let raf = 0;
-    const update = () => {
+    let last = '';
+    const update = (info?: { id: string }) => {
+      // scrolling and zooming do not change the selection; nothing is recomputed during a gesture
+      if (doc.gesturing || (info && (info.id === 'sheet.operation.set-scroll' || info.id === 'sheet.operation.set-zoom-ratio'))) return;
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         if (!doc.api.getActiveWorkbook()) return; // workbook being replaced
@@ -63,13 +66,17 @@ export function useSelection(): SelInfo {
             : rectToA1({ r0: rect.startRow, c0: rect.startColumn, r1: rect.endRow, c1: rect.endColumn })
           : 'A1';
         const st = r?.getCellStyleData();
-        setInfo({ ref, raw: cellEditText(), rect, bold: !!st?.bl, italic: !!st?.it });
+        const next = { ref, raw: cellEditText(), rect, bold: !!st?.bl, italic: !!st?.it };
+        const key = `${ref}|${next.raw}|${next.bold}|${next.italic}|${rect?.startRow},${rect?.startColumn},${rect?.endRow},${rect?.endColumn}`;
+        if (key === last) return; // unchanged: no re-render
+        last = key;
+        setInfo(next);
       });
     };
     update();
     // selection changes are operations, so the command stream covers them; Univer's onSelectionChange
     // facade throws while a workbook is being swapped, so it is not used.
-    const d2 = wb.onCommandExecuted(update);
+    const d2 = wb.onCommandExecuted(update as never);
     return () => {
       cancelAnimationFrame(raf);
       d2.dispose();

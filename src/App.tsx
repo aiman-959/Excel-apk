@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useDraw } from './draw/state';
+import './grid/view';
 import { governor } from './device/governor';
 import { doc } from './state/doc';
 import { detectTier } from './device/tier';
