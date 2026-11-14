@@ -63,9 +63,12 @@ class PictureStore {
   get(id: string) {
     return this.list.find((p) => p.id === id);
   }
+  /** when the current picture was selected (a second tap soon after is a double tap) */
+  selectedAt = 0;
   select(id: string | null) {
     if (this.selected === id) return;
     this.selected = id;
+    this.selectedAt = performance.now();
     this.changed(true, false);
   }
   update(id: string, patch: Partial<PictureDef>) {

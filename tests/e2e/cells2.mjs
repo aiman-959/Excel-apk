@@ -202,29 +202,31 @@ await step('pictures: tap selects, drag moves, saved anchor changes; other pictu
   assert.equal(await ev(() => window.__pictures.list.length), 4);
   await ev(() => { const V = window.__view; V.scrollTo(V.viewInfo(), 400, 0); });
   await page.waitForTimeout(400);
-  // first picture: F4..F7
-  const box = await ev(() => { const P = window.__pictures; const V = window.__view; const v = V.viewInfo(); const p = P.list[0]; const at = (acc, i) => (i <= 0 ? 0 : acc[i - 1]); const x = at(v.colAcc, p.from.col) + p.from.dx; const y = at(v.rowAcc, p.from.row) + p.from.dy; const s = V.toScreen(v, x + 10, y + 20); const h = document.querySelector('[data-testid=grid]').getBoundingClientRect(); return { x: h.left + s.x, y: h.top + s.y }; });
+  // the third picture (150 x 100 px at F14): grab it in the middle
+  const box = await ev(() => { const P = window.__pictures; const V = window.__view; const v = V.viewInfo(); const p = P.list[2]; const at = (acc, i) => (i <= 0 ? 0 : acc[i - 1]); const x = at(v.colAcc, p.from.col) + p.from.dx; const y = at(v.rowAcc, p.from.row) + p.from.dy; const s = V.toScreen(v, x + p.w / 2, y + p.h / 2); const h = document.querySelector('[data-testid=grid]').getBoundingClientRect(); return { x: h.left + s.x, y: h.top + s.y }; });
   await T.tap(box.x, box.y);
   await page.waitForSelector('[data-testid=picture-frame]');
   const before = await ev(() => JSON.parse(JSON.stringify(window.__pictures.list)));
-  await T.drag({ x: box.x + 10, y: box.y + 10 }, { x: box.x - 110, y: box.y + 58 }, { hold: 60, settle: 60 });
+  await T.drag({ x: box.x, y: box.y }, { x: box.x - 20, y: box.y + 48 }, { hold: 60, settle: 60 });
   await page.waitForTimeout(200);
   const after = await ev(() => JSON.parse(JSON.stringify(window.__pictures.list)));
-  assert.notDeepEqual(after[0].from, before[0].from, 'anchor moved');
-  assert.equal(after[0].from.row, before[0].from.row + 2, 'two rows down (48 px)');
-  assert.deepEqual(after.slice(1), before.slice(1));
+  assert.notDeepEqual(after[2].from, before[2].from, 'anchor moved');
+  assert.equal(after[2].from.row, before[2].from.row + 2, 'two rows down (48 px)');
+  assert.deepEqual([after[2].w, after[2].h], [150, 100], 'size unchanged');
+  assert.deepEqual([after[0], after[1], after[3]], [before[0], before[1], before[3]]);
   const f = await saveTo('pics-moved.xlsx');
   await openFile(f);
   const back = await ev(() => JSON.parse(JSON.stringify(window.__pictures.list)));
   assert.equal(back.length, 4);
-  assert.deepEqual([back[0].from, back[0].to], [after[0].from, after[0].to]);
+  assert.deepEqual(back[2].from, after[2].from);
+  assert.deepEqual(back[0].from, before[0].from);
   assert.deepEqual(back[2].link, 'https://example.com/photo/13');
 });
 
 await step('pictures: delete one, view full screen with pinch, insert a new one; all saved', async () => {
   await ev(() => { const V = window.__view; V.scrollTo(V.viewInfo(), 400, 0); });
   await page.waitForTimeout(300);
-  const pos = (i) => ev((i) => { const P = window.__pictures; const V = window.__view; const v = V.viewInfo(); const p = P.list[i]; const at = (acc, k) => (k <= 0 ? 0 : acc[k - 1]); const s = V.toScreen(v, at(v.colAcc, p.from.col) + p.from.dx + 12, at(v.rowAcc, p.from.row) + p.from.dy + 12); const h = document.querySelector('[data-testid=grid]').getBoundingClientRect(); return { x: h.left + s.x, y: h.top + s.y }; }, i);
+  const pos = (i) => ev((i) => { const P = window.__pictures; const V = window.__view; const v = V.viewInfo(); const p = P.list[i]; const at = (acc, k) => (k <= 0 ? 0 : acc[k - 1]); const s = V.toScreen(v, at(v.colAcc, p.from.col) + p.from.dx + (p.w ?? 60) / 2, at(v.rowAcc, p.from.row) + p.from.dy + (p.h ?? 60) / 2); const h = document.querySelector('[data-testid=grid]').getBoundingClientRect(); return { x: h.left + s.x, y: h.top + s.y }; }, i);
   let p = await pos(1);
   await T.tap(p.x, p.y);
   await page.waitForSelector('[data-testid=pic-delete]');
@@ -243,6 +245,7 @@ await step('pictures: delete one, view full screen with pinch, insert a new one;
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), (async () => { await page.click('[data-testid=tab-insert]'); await page.click('[data-testid=tool-picture]'); })()]);
   await chooser.setFiles({ name: 'dot.png', mimeType: 'image/png', buffer: Buffer.from(png) });
   await page.waitForFunction(() => window.__pictures.list.length === 4);
+  assert.equal(await page.$('.sheet-backdrop'), null, 'the Insert panel closes so the new picture is visible');
   const files = await serialize();
   const drawing = strFromU8(files['xl/drawings/drawing1.xml']);
   assert.equal((drawing.match(/<xdr:pic>/g) ?? []).length, 3, 'two kept + one new on the first sheet');

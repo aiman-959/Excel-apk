@@ -51,7 +51,7 @@ type Mode =
   | { kind: 'pending'; id: number; x: number; y: number; t: number; timer: ReturnType<typeof setTimeout>; hit: GridHit }
   | { kind: 'pan'; id: number; x: number; y: number; ox: number; oy: number; lock: 'x' | 'y' | null; samples: Array<[number, number, number]> }
   | { kind: 'pinch'; d0: number; cx: number; cy: number }
-  | { kind: 'resize'; id: number; axis: 'col' | 'row'; index: number; start: number; size: number; pos: number }
+  | { kind: 'resize'; id: number; axis: 'col' | 'row'; index: number; start: number; last: number; size: number; pos: number }
   | { kind: 'passthrough'; id: number }
   | { kind: 'dead' };
 
@@ -69,6 +69,7 @@ export class GridInput {
   private pendingScroll: { x: number; y: number; vx: number; vy: number } | null = null;
   private guide: HTMLDivElement;
   private seq = 0;
+  private resizeLong: ReturnType<typeof setTimeout> | undefined;
   /** set while the drawing layer is on top: the grid must not react */
   enabled = true;
 
@@ -147,19 +148,21 @@ export class GridInput {
   /** Header edge under the point (for resizing): the column / row that ends there. */
   private headerEdge(v: ViewInfo, x: number, y: number): { axis: 'col' | 'row'; index: number; pos: number } | null {
     const at = (acc: number[], i: number) => (i <= 0 ? 0 : acc[Math.min(i, acc.length) - 1] ?? 0);
+    // the edge zone never covers more than a third of the header cell, so its middle stays tappable
+    const tol = (acc: number[], i: number) => Math.min(EDGE_PX, ((at(acc, i + 1) - at(acc, i)) * v.zoom) / 3);
     if (y < v.headerH && x >= v.headerW) {
       const g = hitGrid(v, x, y);
       for (const c of [g.col, g.col - 1]) {
         if (c < 0) continue;
         const edge = toScreen(v, at(v.colAcc, c + 1), 0).x;
-        if (Math.abs(x - edge) <= EDGE_PX) return { axis: 'col', index: c, pos: edge };
+        if (Math.abs(x - edge) <= tol(v.colAcc, g.col)) return { axis: 'col', index: c, pos: edge };
       }
     } else if (x < v.headerW && y >= v.headerH) {
       const g = hitGrid(v, x, y);
       for (const r of [g.row, g.row - 1]) {
         if (r < 0) continue;
         const edge = toScreen(v, 0, at(v.rowAcc, r + 1)).y;
-        if (Math.abs(y - edge) <= EDGE_PX) return { axis: 'row', index: r, pos: edge };
+        if (Math.abs(y - edge) <= tol(v.rowAcc, g.row)) return { axis: 'row', index: r, pos: edge };
       }
     }
     return null;
@@ -258,7 +261,17 @@ export class GridInput {
     if (edge) {
       const ws = doc.wb.getActiveSheet();
       const size = edge.axis === 'col' ? ws.getColumnWidth(edge.index) : ws.getRowHeight(edge.index);
-      this.mode = { kind: 'resize', id: e.pointerId, axis: edge.axis, index: edge.index, start: edge.axis === 'col' ? p.x : p.y, size, pos: edge.pos };
+      const hit = this.hit(v, p.x, p.y);
+      const at = edge.axis === 'col' ? p.x : p.y;
+      // resting on the edge without moving is still a long press on the header
+      this.resizeLong = setTimeout(() => {
+        const m = this.mode;
+        if (m.kind !== 'resize' || Math.abs(m.last - m.start) > 4) return;
+        this.guide.style.display = 'none';
+        this.mode = { kind: 'pending', id: m.id, x: p.x, y: p.y, t: performance.now(), timer: setTimeout(() => {}, 0), hit };
+        this.longPress();
+      }, LONG_MS);
+      this.mode = { kind: 'resize', id: e.pointerId, axis: edge.axis, index: edge.index, start: at, last: at, size, pos: edge.pos };
       this.showGuide(edge.axis, edge.pos);
       return;
     }
@@ -316,6 +329,7 @@ export class GridInput {
     }
     if (m.kind === 'resize') {
       const cur = m.axis === 'col' ? p.x : p.y;
+      m.last = cur;
       const z = viewInfo()?.zoom ?? 1;
       const min = m.pos - m.size * z + 6;
       this.showGuide(m.axis, Math.max(min, m.pos + (cur - m.start)));
@@ -370,6 +384,7 @@ export class GridInput {
         this.endGesture('pinch');
       } // one finger still down: wait for it (no pan after a pinch: avoids jumps)
     } else if (m.kind === 'resize') {
+      clearTimeout(this.resizeLong);
       this.guide.style.display = 'none';
       this.mode = { kind: 'idle' };
       const z = viewInfo()?.zoom ?? 1;

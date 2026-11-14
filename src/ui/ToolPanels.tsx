@@ -127,7 +127,7 @@ export function ToolPanel({ tab }: { tab: ToolTab }) {
             <Tool icon={<Sigma />} label="Function" onClick={() => ui.open('functions')} />
             <Tool icon={<MessageSquare />} label="Comment / note" testId="tool-comments" onClick={() => ui.open('comments')} />
             <Tool icon={<Activity />} label="Sparklines" testId="tool-sparklines" onClick={() => ui.open('sparklines')} />
-            <Tool icon={<ImagePlus />} label="Picture" testId="tool-picture" onClick={() => pickPicture()} />
+            <Tool icon={<ImagePlus />} label="Picture" testId="tool-picture" onClick={() => (ui.setTab(null), pickPicture())} />
             <Tool icon={<Link2 />} label="Link" testId="tool-link" onClick={() => ui.open('link')} />
             <Tool icon={<FileSpreadsheet />} label="New sheet" onClick={run(sheets.add)} />
           </div>

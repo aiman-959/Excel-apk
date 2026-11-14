@@ -22,6 +22,20 @@ export function SelectionBar() {
   const editing = useEdit((s) => s.editing);
   const [stats, setStats] = useState<SelStats | null>(null);
   const [hasLink, setHasLink] = useState(false);
+  const [tick, setTick] = useState(0);
+  // values inside the selection can change without the selection changing (fill, paste, recalculation)
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const d = doc.wb.onCommandExecuted((info) => {
+      if (doc.gesturing || !/^sheet\.(mutation|command)\./.test(info.id)) return;
+      clearTimeout(t);
+      t = setTimeout(() => setTick((x) => x + 1), 120);
+    });
+    return () => {
+      d.dispose();
+      clearTimeout(t);
+    };
+  }, [sel.ref]);
   useEffect(() => {
     // computed after the selection settles, never during a scroll gesture
     const t = setTimeout(() => {
@@ -34,7 +48,7 @@ export function SelectionBar() {
       }
     }, 60);
     return () => clearTimeout(t);
-  }, [sel.ref, sel.raw]);
+  }, [sel.ref, sel.raw, tick]);
   if (editing || (!stats && !hasLink)) return null;
   return (
     <div className="selbar" data-testid="selection-bar">

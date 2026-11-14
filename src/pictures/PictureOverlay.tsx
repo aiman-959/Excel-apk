@@ -29,6 +29,7 @@ export function PictureOverlay() {
   usePictures();
   const [, force] = useState(0);
   const [live, setLive] = useState<Box | null>(null);
+  const lastTap = useRef(0);
   const drag = useRef<{ id: number; mode: string; sx: number; sy: number; box: Box } | null>(null);
   const sel = pictures.selected ? pictures.get(pictures.selected) : undefined;
 
@@ -63,6 +64,8 @@ export function PictureOverlay() {
   const move = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
+    // a finger never rests perfectly still: small jitter is still a tap
+    if (!live && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 5) return;
     const dx = (e.clientX - d.sx) / v.zoom;
     const dy = (e.clientY - d.sy) / v.zoom;
     const b = { ...d.box };
@@ -89,18 +92,26 @@ export function PictureOverlay() {
     if (!d || d.id !== e.pointerId) return;
     drag.current = null;
     if (live) pictures.update(sel.id, anchorFor(sel, live, v.rowAcc, v.colAcc));
+    else if (d.mode === 'move') {
+      // a tap on the frame: the second tap of a double tap opens the full-screen viewer
+      const now = performance.now();
+      if (now - Math.max(lastTap.current, pictures.selectedAt) < 400) ui.open('picture', sel.id);
+      lastTap.current = now;
+    }
     setLive(null);
   };
   const handle = (mode: string, style: React.CSSProperties) => <div className="pic-handle" style={style} data-testid={'pic-handle-' + mode} onPointerDown={down(mode)} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />;
   const barBelow = sb.y < v.headerH + 56;
+  const small = sb.w < 56 || sb.h < 56;
   return (
     <div className="pic-overlay" data-testid="picture-overlay">
       {live && <img className="pic-ghost" alt="" src={pictures.url(sel.media)} style={{ left: sb.x, top: sb.y, width: sb.w, height: sb.h }} />}
       <div className="pic-frame" data-testid="picture-frame" style={{ left: sb.x, top: sb.y, width: sb.w, height: sb.h }} onPointerDown={down('move')} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-        {handle('nw', { left: -11, top: -11 })}
-        {handle('ne', { right: -11, top: -11 })}
-        {handle('sw', { left: -11, bottom: -11 })}
-        {handle('se', { right: -11, bottom: -11 })}
+        {/* small pictures keep one handle, so there is room left to grab and move them */}
+        {!small && handle('nw', { left: -11, top: -11 })}
+        {!small && handle('ne', { right: -11, top: -11 })}
+        {!small && handle('sw', { left: -11, bottom: -11 })}
+        {handle('se', small ? { right: -22, bottom: -22 } : { right: -11, bottom: -11 })}
       </div>
       <div className="pic-bar" style={{ left: Math.max(4, Math.min(sb.x, v.width - 150)), top: barBelow ? sb.y + sb.h + 14 : sb.y - 54 }}>
         <button className="dbtn" aria-label="View picture" data-testid="pic-view" onClick={() => ui.open('picture', sel.id)}>
