@@ -105,6 +105,7 @@ export class Compositor {
     this.unit = unit;
     this.v0 = v;
     this.stats = { renders: 0, frames: 0, renderMs: 0 };
+    let repaint = false;
     // Univer's own scroll bars are painted inside the canvas and would be copied into every block
     // (the scroll bar object must stay: Univer scrolls through it. Only its painting is switched off;
     // Petak shows its own thin indicators while a finger scrolls.)
@@ -113,10 +114,14 @@ export class Compositor {
       if (sb && !sb.__quiet) {
         sb.__quiet = true;
         sb.render = () => {};
+        repaint = true;
       }
     }
-    unit.scene.makeDirty(true);
-    unit.scene.render();
+    // the picture on screen is reused as the first block; repaint only to erase scroll bars the first time
+    if (repaint) {
+      unit.scene.makeDirty(true);
+      unit.scene.render();
+    }
     const o = mainOrigin(v);
     this.o0 = { ...o };
     this.cur = { ...o };

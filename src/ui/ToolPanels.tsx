@@ -2,12 +2,15 @@ import {
   Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, WrapText, Merge, Split, Grid3x3, PanelTop, PanelBottom, SquareDashed,
   Hash, Highlighter, Eraser, Search, ArrowDownAZ, ArrowUpZA, Filter, FilterX, Snowflake, BarChart3, LineChart, PieChart, Table2, Sigma, FileSpreadsheet,
   PenTool, Square, Circle, Minus, Spline, MoveUpRight, Type, ImagePlus, Ruler, Ratio,
+  Scissors, Copy, ClipboardPaste, ClipboardType, ArrowDownToLine, ArrowRightToLine, EyeOff, Eye, Link2,
   Code2, Workflow, Gauge, Rows3, Columns3, Trash2, Undo2, Redo2, ListX, Info, MessageSquare, ListChecks, Activity, Target, SlidersHorizontal, Network,
 } from 'lucide-react';
 import { Tool } from './Chrome';
 import { data, edit, fmt, sheets } from './actions';
 import { guard, ui, type ToolTab } from './store';
 import { useSelection } from './hooks';
+import { clip, structure } from './cellActions';
+import { pickPicture } from '../pictures/PictureOverlay';
 import { draw, type DrawTool } from '../draw/state';
 
 const startDraw = (tool: DrawTool, panel?: 'cellsize') => () => {
@@ -33,6 +36,12 @@ export function ToolPanel({ tab }: { tab: ToolTab }) {
               <Tool icon={<Redo2 />} label="Redo" onClick={edit.redo} />
               <Tool icon={<Search />} label="Find & replace" testId="tool-find" onClick={() => ui.open('find')} />
               <Tool icon={<Eraser />} label="Clear" onClick={run(edit.clear)} />
+              <Tool icon={<Scissors />} label="Cut" testId="tool-cut" onClick={run(clip.cut)} />
+              <Tool icon={<Copy />} label="Copy" testId="tool-copy" onClick={run(clip.copy)} />
+              <Tool icon={<ClipboardPaste />} label="Paste" testId="tool-paste" onClick={run(clip.paste)} />
+              <Tool icon={<ClipboardType />} label="Paste values" testId="tool-paste-values" onClick={run(clip.pasteValues)} />
+              <Tool icon={<ArrowDownToLine />} label="Fill down" testId="tool-fill-down" onClick={run(() => structure.fill('down'))} />
+              <Tool icon={<ArrowRightToLine />} label="Fill right" onClick={run(() => structure.fill('right'))} />
             </div>
           </div>
           <div className="group">
@@ -44,6 +53,9 @@ export function ToolPanel({ tab }: { tab: ToolTab }) {
               <Tool icon={<Columns3 />} label="Column right" onClick={run(edit.insertColRight)} />
               <Tool icon={<Trash2 />} label="Delete rows" onClick={run(edit.deleteRows)} />
               <Tool icon={<Trash2 />} label="Delete cols" onClick={run(edit.deleteCols)} />
+              <Tool icon={<EyeOff />} label="Hide rows" testId="tool-hide-rows" onClick={run(structure.hideRows)} />
+              <Tool icon={<EyeOff />} label="Hide cols" testId="tool-hide-cols" onClick={run(structure.hideCols)} />
+              <Tool icon={<Eye />} label="Unhide all" testId="tool-unhide" onClick={run(structure.unhideAll)} />
             </div>
           </div>
         </>
@@ -115,6 +127,8 @@ export function ToolPanel({ tab }: { tab: ToolTab }) {
             <Tool icon={<Sigma />} label="Function" onClick={() => ui.open('functions')} />
             <Tool icon={<MessageSquare />} label="Comment / note" testId="tool-comments" onClick={() => ui.open('comments')} />
             <Tool icon={<Activity />} label="Sparklines" testId="tool-sparklines" onClick={() => ui.open('sparklines')} />
+            <Tool icon={<ImagePlus />} label="Picture" testId="tool-picture" onClick={() => pickPicture()} />
+            <Tool icon={<Link2 />} label="Link" testId="tool-link" onClick={() => ui.open('link')} />
             <Tool icon={<FileSpreadsheet />} label="New sheet" onClick={run(sheets.add)} />
           </div>
         </div>

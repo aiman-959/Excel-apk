@@ -13,6 +13,10 @@ import { ui, useUi } from './ui/store';
 import { prefs } from './state/storage';
 import { PetakLogo } from './ui/Logo';
 import { fileActions } from './ui/actions';
+import { SelectionBar, ContextMenu, LinkDialog, AskDialog } from './ui/CellExtras';
+import { PictureOverlay, PictureViewer } from './pictures/PictureOverlay';
+import { installKeyboard } from './ui/keyboard';
+import { draw } from './draw/state';
 
 // Heavy, rarely used panels are code-split and loaded on demand.
 const ChartPanel = lazy(() => import('./charts/ChartPanel'));
@@ -72,23 +76,40 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', onHide);
   }, [ready]);
 
-  // Keyboard shortcuts for tablets with keyboards / desktop browsers
+  // Keyboard (Bluetooth / USB keyboards, desktop browsers): navigation, editing, clipboard, Ctrl keys
   useEffect(() => {
+    const off = installKeyboard();
+    // Ctrl+S / Ctrl+O also work while a text field has focus
     const k = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      if (!typing) return;
       if (e.key === 's') {
         e.preventDefault();
         fileActions.save();
       } else if (e.key === 'o') {
         e.preventDefault();
         fileActions.open();
-      } else if (e.key === 'f') {
-        e.preventDefault();
-        ui.open('find');
       }
     };
     window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    return () => {
+      off();
+      window.removeEventListener('keydown', k);
+    };
+  }, []);
+
+  // long press, taps on shapes and pictures
+  useEffect(() => {
+    doc.inputHooks = {
+      onContext: (h) => ui.openContext({ area: h.area, row: h.row, col: h.col, picture: h.picture }),
+      onShapeTap: (id) => {
+        draw.open('select');
+        draw.select([id]);
+      },
+      onPictureDoubleTap: (id) => ui.open('picture', id),
+    };
   }, []);
 
   const toggleTheme = () => ui.setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -105,6 +126,8 @@ export default function App() {
               <DrawLayer />
             </Suspense>
           )}
+          {ready && !drawing && <PictureOverlay />}
+          {ready && !drawing && <SelectionBar />}
         </div>
         {tablet && ready && <SidePanel />}
       </div>
@@ -128,8 +151,12 @@ export default function App() {
           {dialog === 'whatif' && <WhatIfDialog />}
           {dialog === 'slicers' && <SlicersDialog />}
           {dialog === 'datamodel' && <DataModelDialog />}
+          {dialog === 'link' && <LinkDialog />}
+          {dialog === 'picture' && <PictureViewer />}
         </Suspense>
       )}
+      {ready && <ContextMenu />}
+      <AskDialog />
       <Overlays />
       {!ready && (
         <div className="splash" role="status" aria-label="Loading Petak">

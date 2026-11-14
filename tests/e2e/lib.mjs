@@ -6,11 +6,11 @@ import path from 'node:path';
 
 export const BASE = process.env.BASE_URL ?? 'http://localhost:4173/';
 
-export async function start(name, profile = 'phone') {
+export async function start(name, profile = 'phone', extra = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `petak-${name}-`));
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   const opts = profile === 'tablet' ? { viewport: { width: 1280, height: 800 }, hasTouch: true, isMobile: true, acceptDownloads: true } : { ...devices['Pixel 7'], acceptDownloads: true };
-  const ctx = await browser.newContext(opts);
+  const ctx = await browser.newContext({ ...opts, ...extra });
   const page = await ctx.newPage();
   const errors = [];
   let current = '';

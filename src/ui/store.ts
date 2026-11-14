@@ -17,7 +17,13 @@ export type DialogId =
   | 'sparklines'
   | 'whatif'
   | 'slicers'
-  | 'datamodel';
+  | 'datamodel'
+  | 'link'
+  | 'picture'
+  | 'names'
+  | 'fonts'
+  | 'pagesetup'
+  | 'recent';
 export type ToolTab = 'edit' | 'format' | 'insert' | 'draw' | 'data' | 'tools';
 
 interface UiState {
@@ -27,10 +33,20 @@ interface UiState {
   toast: { text: string; id: number } | null;
   progress: { done: number; total: number; label: string } | null;
   confirm: { text: string; resolve: (ok: boolean) => void; okOnly?: boolean } | null;
+  /** three-way question (Save / Don't save / Cancel) */
+  ask: { text: string; options: Array<{ id: string; label: string; kind?: 'primary' | 'secondary' | 'danger' }>; resolve: (id: string | null) => void } | null;
+  /** long-press menu: what was pressed */
+  context: ContextTarget | null;
   theme: 'light' | 'dark';
 }
+export interface ContextTarget {
+  area: 'cell' | 'colHeader' | 'rowHeader' | 'corner';
+  row: number;
+  col: number;
+  picture?: string;
+}
 
-let state: UiState = { dialog: null, tab: null, toast: null, progress: null, confirm: null, theme: 'light' };
+let state: UiState = { dialog: null, tab: null, toast: null, progress: null, confirm: null, ask: null, context: null, theme: 'light' };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<UiState>) => {
   state = { ...state, ...patch };
@@ -90,6 +106,27 @@ export const ui = {
         },
       }),
     );
+  },
+  /** Ask a question with named answers; resolves null when dismissed. */
+  ask(text: string, options: NonNullable<UiState['ask']>['options']): Promise<string | null> {
+    return new Promise((resolve) =>
+      set({
+        ask: {
+          text,
+          options,
+          resolve: (id) => {
+            set({ ask: null });
+            resolve(id);
+          },
+        },
+      }),
+    );
+  },
+  openContext(target: ContextTarget) {
+    set({ context: target, tab: null });
+  },
+  closeContext() {
+    set({ context: null });
   },
   setTheme(theme: 'light' | 'dark') {
     set({ theme });

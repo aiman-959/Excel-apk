@@ -3,7 +3,7 @@
  * worker and app metadata. UI components talk to this singleton.
  */
 import type { IWorkbookData, ICellData, IWorksheetData } from '@univerjs/core';
-import { ICommandService, IResourceManagerService, UniverInstanceType } from '@univerjs/core';
+import { ICommandService, IResourceManagerService, IUndoRedoService, IUniverInstanceService, UniverInstanceType } from '@univerjs/core';
 import { RES_THREADS } from '../io/review';
 import { setSparklines } from '../features/sparklines';
 import { setDrawings, setImageListener } from '../draw/render';
@@ -150,6 +150,14 @@ class Doc {
   init(container: HTMLElement, mobile: boolean) {
     this.h = createUniverApp(container, { mobile });
     if (mobile) {
+      // Univer's touch UI activates its hidden in-cell editor when the selected cell is tapped
+      // again. Nothing is shown, but focus goes to it (the keyboard opens), typed text is lost and
+      // undo is routed to that editor instead of the sheet. Petak edits in the formula bar, so
+      // that editor is never allowed to open on touch devices.
+      const api = this.h.api as unknown as { addEvent(name: string, fn: (e: { id: string; params?: { visible?: boolean }; cancel?: boolean }) => void): unknown; Event: { BeforeCommandExecute: string } };
+      api.addEvent(api.Event.BeforeCommandExecute, (e) => {
+        if ((e.id === 'sheet.operation.set-cell-edit-visible' || e.id === 'sheet.operation.set-activate-cell-edit') && e.params?.visible !== false) e.cancel = true;
+      });
       const tier = getTier();
       const comp = new Compositor(container, tier.tier === 'high' ? 8 : tier.tier === 'mid' ? 6 : 4);
       this.input = new GridInput(container, comp, {
@@ -631,10 +639,28 @@ class Doc {
     this.emit({});
   }
 
+  /**
+   * Univer keeps one undo history per "unit" and undoes in the focused one. Its hidden
+   * cell editor is a unit too, so after it had focus, undo silently did nothing for the
+   * sheet. Petak always undoes in the workbook.
+   */
+  /** for tests and debugging */
+  get __undoSvc() {
+    return this.injector<unknown>(IUndoRedoService);
+  }
+  private focusWorkbook() {
+    try {
+      this.injector<IUniverInstanceService>(IUniverInstanceService).focusUnit(this.wb.getId());
+    } catch {
+      /* no workbook */
+    }
+  }
   undo() {
+    this.focusWorkbook();
     return this.h.api.undo();
   }
   redo() {
+    this.focusWorkbook();
     return this.h.api.redo();
   }
 }

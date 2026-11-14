@@ -234,3 +234,18 @@ html[data-load='1'] *, html[data-load='2'] * { animation-duration: 0s !important
 .scroll-ind.v { right: 2px; top: 0; width: 4px; }
 .scroll-ind.h { bottom: 2px; left: 0; height: 4px; }
 html[data-theme='dark'] .scroll-ind { background: rgba(187, 247, 208, 0.5); }
+
+/* ---------------------------------------------------------------- selection bar, pictures */
+.selbar { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 8px; align-items: center; justify-content: flex-end; pointer-events: none; z-index: 2; flex-wrap: wrap; }
+.status-pill { pointer-events: auto; display: flex; gap: 12px; padding: 6px 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; max-width: 100%; overflow-x: auto; white-space: nowrap; }
+.status-pill b { color: var(--text); font-weight: 600; }
+.link-pill { pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 20px; border: 0; background: var(--accent); color: var(--on-accent); font-weight: 600; box-shadow: var(--shadow); cursor: pointer; margin-right: auto; }
+.pic-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
+.pic-frame { position: absolute; border: 2px solid var(--accent); box-sizing: border-box; pointer-events: auto; touch-action: none; cursor: move; }
+.pic-ghost { position: absolute; opacity: 0.6; pointer-events: none; }
+.pic-handle { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid var(--accent-strong); box-sizing: border-box; touch-action: none; }
+.pic-handle::after { content: ''; position: absolute; inset: -12px; } /* 44 px touch target */
+.pic-bar { position: absolute; display: flex; gap: 2px; padding: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); pointer-events: auto; }
+.pic-viewer { position: fixed; inset: 0; z-index: 60; background: rgba(5, 20, 12, 0.94); display: grid; place-items: center; touch-action: none; overflow: hidden; }
+.pic-viewer img { max-width: 100vw; max-height: 100vh; object-fit: contain; will-change: transform; user-select: none; -webkit-user-drag: none; }
+.pic-viewer .pic-close { position: absolute; top: calc(10px + var(--safe-top, 0px)); right: 10px; color: #fff; background: rgba(255, 255, 255, 0.14); border-radius: 50%; width: 48px; height: 48px; }
