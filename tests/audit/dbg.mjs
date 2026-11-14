@@ -1,0 +1,17 @@
+import { chromium, devices } from 'playwright';
+import { touch } from '../e2e/touch.mjs';
+const b = await chromium.launch(); const ctx = await b.newContext({ ...devices['Pixel 7'] }); const page = await ctx.newPage();
+page.on('console', (m) => console.log('  [console]', m.type(), m.text().slice(0, 160)));
+await page.goto('http://localhost:4173/?fresh'); await page.waitForFunction(() => window.__doc?.snapshot?.sheets?.length > 0); await page.waitForTimeout(500);
+const t = await touch(page);
+await page.click('[data-testid=tab-draw]'); await page.click('text=Line'); await page.waitForSelector('[data-testid=draw-layer]');
+await t.drag({ x: 100, y: 300 }, { x: 250, y: 380 });
+await page.click('[data-testid=draw-close]'); await page.waitForTimeout(300);
+console.log('dirty', await page.evaluate(() => window.__doc.snapshot.dirty));
+page.on('filechooser', () => console.log('FILECHOOSER'));
+await page.click('[data-testid=open]'); await page.waitForTimeout(800);
+console.log('confirm?', await page.evaluate(() => document.querySelector('[data-testid=confirm-text]')?.textContent));
+const ok = await page.$('[data-testid=confirm-ok]'); if (ok) await ok.click();
+await page.waitForTimeout(1500);
+console.log('toast', await page.evaluate(() => document.querySelector('.toast')?.textContent));
+await b.close();
