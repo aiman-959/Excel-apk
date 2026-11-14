@@ -78,7 +78,7 @@ page first) and could not be compiled here (no Android SDK): the CI `android` jo
 | H-06 | Unsaved changes prompt can't save | Not started; `AskDialog` / `ui.ask` already exist for Save / Don't save / Cancel |
 | H-07 | Rich text flattened | Kept on save (C-01); not displayed as runs yet |
 
-`AUDIT.md` still shows every item as "Open". **Update its statuses with the test evidence above** as part of closing Phase 2.
+`AUDIT.md` statuses now show Fixed / Partly with the test that proves each fix; keep them current as items close.
 
 ## Drawing tools rework (K-01 to K-04): done
 
